@@ -1,30 +1,44 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kpss_tekrar_takibi/app/router/app_router.dart';
 import 'package:kpss_tekrar_takibi/core/theme/app_theme.dart';
 import 'package:kpss_tekrar_takibi/l10n/app_localizations.dart';
 
-void main() {
-  runApp(const ProviderScope(child: App()));
+import 'core/db/app_database.dart';
+import 'core/db/seed.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final db = AppDatabase();
+  await seedIfNeeded(db);
+
+  runApp(
+    ProviderScope(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+      ],
+      child: const App(),
+    ),
+  );
 }
 
-class App extends StatefulWidget {
+class App extends ConsumerWidget {
   const App({super.key});
 
   @override
-  State<App> createState() => _AppState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(appRouterProvider);
+    final themeMode = ref.watch(themeModeProvider);
+    final locale = ref.watch(localeProvider);
 
-class _AppState extends State<App> {
-  final _router = AppRouter();
-
-  @override
-  Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'KPSS Tekrar Takibi',
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
+      themeMode: themeMode,
+      locale: locale,
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
@@ -35,7 +49,7 @@ class _AppState extends State<App> {
         Locale('tr'),
         Locale('en'),
       ],
-      routerConfig: _router.config(),
+      routerConfig: router.config(),
     );
   }
 }
