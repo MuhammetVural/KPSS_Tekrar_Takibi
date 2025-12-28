@@ -32,7 +32,13 @@ class Subjects extends Table {
 class Topics extends Table {
   TextColumn get id => text()();
   TextColumn get subjectId => text().references(Subjects, #id)();
+  /// Alt konu desteği (parent topic). Null ise ana konudur.
+  /// Self-reference için customConstraint kullanıyoruz.
+  TextColumn get parentTopicId =>
+      text().nullable().customConstraint('NULL REFERENCES topics(id)')();
   TextColumn get title => text()();
+
+  IntColumn get difficulty => integer().withDefault(const Constant(1))();
 
   IntColumn get questionCount => integer().withDefault(const Constant(0))();
 
@@ -58,7 +64,20 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 3;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) async {
+      await m.createAll();
+    },
+    onUpgrade: (m, from, to) async {
+      // v2: Topics tablosuna parentTopicId eklendi
+      if (from < 3) {
+        await m.addColumn(topics, topics.parentTopicId);
+      }
+    },
+  );
 
 
 }

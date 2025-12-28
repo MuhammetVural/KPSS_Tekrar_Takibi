@@ -80,6 +80,8 @@ class TopicsRoute extends PageRouteInfo<TopicsRouteArgs> {
     Key? key,
     required String subjectId,
     required String subjectName,
+    String? parentTopicId,
+    String? parentTitle,
     List<PageRouteInfo>? children,
   }) : super(
          TopicsRoute.name,
@@ -87,6 +89,8 @@ class TopicsRoute extends PageRouteInfo<TopicsRouteArgs> {
            key: key,
            subjectId: subjectId,
            subjectName: subjectName,
+           parentTopicId: parentTopicId,
+           parentTitle: parentTitle,
          ),
          initialChildren: children,
        );
@@ -101,6 +105,8 @@ class TopicsRoute extends PageRouteInfo<TopicsRouteArgs> {
         key: args.key,
         subjectId: args.subjectId,
         subjectName: args.subjectName,
+        parentTopicId: args.parentTopicId,
+        parentTitle: args.parentTitle,
       );
     },
   );
@@ -111,6 +117,8 @@ class TopicsRouteArgs {
     this.key,
     required this.subjectId,
     required this.subjectName,
+    this.parentTopicId,
+    this.parentTitle,
   });
 
   final Key? key;
@@ -119,9 +127,13 @@ class TopicsRouteArgs {
 
   final String subjectName;
 
+  final String? parentTopicId;
+
+  final String? parentTitle;
+
   @override
   String toString() {
-    return 'TopicsRouteArgs{key: $key, subjectId: $subjectId, subjectName: $subjectName}';
+    return 'TopicsRouteArgs{key: $key, subjectId: $subjectId, subjectName: $subjectName, parentTopicId: $parentTopicId, parentTitle: $parentTitle}';
   }
 
   @override
@@ -130,9 +142,16 @@ class TopicsRouteArgs {
     if (other is! TopicsRouteArgs) return false;
     return key == other.key &&
         subjectId == other.subjectId &&
-        subjectName == other.subjectName;
+        subjectName == other.subjectName &&
+        parentTopicId == other.parentTopicId &&
+        parentTitle == other.parentTitle;
   }
 
   @override
-  int get hashCode => key.hashCode ^ subjectId.hashCode ^ subjectName.hashCode;
+  int get hashCode =>
+      key.hashCode ^
+      subjectId.hashCode ^
+      subjectName.hashCode ^
+      parentTopicId.hashCode ^
+      parentTitle.hashCode;
 }
