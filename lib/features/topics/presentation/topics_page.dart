@@ -122,17 +122,28 @@ class TopicsPage extends ConsumerWidget {
                 ? topic.title
                 : '${parentTopicTitle!} > ${topic.title}';
 
-            final hasStarted = topic.nextReviewAt != null;
+            final isNotStarted = topic.reviewState == 0;
+            final isActive = topic.reviewState == 1;
+            final isCompleted = topic.reviewState == 2;
+            final isMaintenance = topic.reviewState == 3;
+            final hasStarted = isActive || isMaintenance;
             final now = DateTime.now();
-            final state = MemoryUtils.stateLabel(now, topic.lastReviewedAt, topic.nextReviewAt);
-            final memPercent = topic.nextReviewAt == null
+            final state = isCompleted
+                ? 'Tamamlandı'
+                : MemoryUtils.stateLabel(now, topic.lastReviewedAt, topic.nextReviewAt);
+
+            final memPercent = isCompleted
+                ? '%100'
+                : (topic.nextReviewAt == null
                 ? '-'
-                : '%${MemoryUtils.percent(now, topic.lastReviewedAt, topic.nextReviewAt)}';
-            final remaining = MemoryUtils.remainingLong(now, topic.nextReviewAt);
+                : '%${MemoryUtils.percent(now, topic.lastReviewedAt, topic.nextReviewAt)}');
+
+            final remaining = isCompleted ? '-' : MemoryUtils.remainingLong(now, topic.nextReviewAt);
+
             final totalLevels = ReviewIntervals.daysForDifficulty(difficulty).length;
-            final level = topic.nextReviewAt == null
-                ? '-/$totalLevels'
-                : '${topic.intervalIndex + 1}/$totalLevels';
+            final level = isCompleted
+                ? '$totalLevels/$totalLevels'
+                : (topic.nextReviewAt == null ? '-/$totalLevels' : '${topic.intervalIndex + 1}/$totalLevels');
 
             return SafeArea(
               child: Padding(
@@ -164,7 +175,7 @@ class TopicsPage extends ConsumerWidget {
 
                     const SizedBox(height: 16),
 
-                    if (!hasStarted) ...[
+                    if (isNotStarted) ...[
                       Row(
                         children: [
                           Text('Zorluk', style: Theme.of(ctx).textTheme.titleMedium),
@@ -202,7 +213,7 @@ class TopicsPage extends ConsumerWidget {
                       const SizedBox(height: 16),
                     ],
 
-                    if (!hasStarted) ...[
+                    if (isNotStarted) ...[
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton(
@@ -210,7 +221,7 @@ class TopicsPage extends ConsumerWidget {
                             await _startReview(ref, topic, listArgs, difficulty: difficulty);
                             Navigator.of(ctx).pop();
                           },
-                          child: const Text('Konu ve Soru Çözümü Bitti Takibi Başlat'),
+                          child: const Text('Konu ve Soru Çözümü Bitti • Takibi Başlat'),
                         ),
                       ),
                     ] else ...[
@@ -302,20 +313,83 @@ class TopicsPage extends ConsumerWidget {
         required int difficulty,
       }) async {
     final db = ref.read(appDatabaseProvider);
-
     final nowMs = DateTime.now().millisecondsSinceEpoch;
 
     final days = ReviewIntervals.daysForDifficulty(difficulty);
     final idx = ReviewIntervals.clampIndex(row.intervalIndex, length: days.length);
-    final nextIdx = ReviewIntervals.clampIndex(idx + 1, length: days.length);
-    final nextDays = days[nextIdx];
 
-    final nextMs = nowMs + Duration(days: nextDays).inMilliseconds;
+// Maintenance: her seferinde maintenanceDays kadar ileri
+    if (row.reviewState == 3) {
+      final nextMs = nowMs + Duration(days: row.maintenanceDays).inMilliseconds;
+      await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
+        TopicsCompanion(
+          lastReviewedAt: drift.Value(nowMs),
+          nextReviewAt: drift.Value(nextMs),
+        ),
+      );
+      ref.invalidate(topicsProvider(currentArgs));
+      return;
+    }
+
+// Son seviyedeyse: bakım moduna geçir
+    final isLast = idx >= days.length - 1;
+    if (isLast) {
+      final nextMs = nowMs + Duration(days: row.maintenanceDays).inMilliseconds;
+      await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
+        TopicsCompanion(
+          reviewState: const drift.Value(3),
+          intervalIndex: drift.Value(idx),
+          lastReviewedAt: drift.Value(nowMs),
+          nextReviewAt: drift.Value(nextMs),
+        ),
+      );
+      ref.invalidate(topicsProvider(currentArgs));
+      return;
+    }
+
+// normal ilerleme
+    final nextIdx = ReviewIntervals.clampIndex(idx + 1, length: days.length);
+    final gap = ReviewIntervals.gapDays(days, idx, nextIdx); // <<< fark gün
+    final nextMs = nowMs + Duration(days: days[nextIdx]).inMilliseconds;
 
     await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
       TopicsCompanion(
         difficulty: drift.Value(difficulty),
+        reviewState: const drift.Value(1),
         intervalIndex: drift.Value(nextIdx),
+        lastReviewedAt: drift.Value(nowMs),
+        nextReviewAt: drift.Value(nextMs),
+      ),
+    );
+
+    ref.invalidate(topicsProvider(currentArgs));
+  }
+
+  Future<void> _completeTopic(WidgetRef ref, Topic row, TopicsArgs currentArgs) async {
+    final db = ref.read(appDatabaseProvider);
+    await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
+      const TopicsCompanion(
+        reviewState: drift.Value(2),
+        nextReviewAt: drift.Value(null),
+      ),
+    );
+    ref.invalidate(topicsProvider(currentArgs));
+  }
+
+  Future<void> _startMaintenance(
+      WidgetRef ref,
+      Topic row,
+      TopicsArgs currentArgs, {
+        required int difficulty,
+      }) async {
+    final db = ref.read(appDatabaseProvider);
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final nextMs = nowMs + Duration(days: row.maintenanceDays).inMilliseconds;
+
+    await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
+      TopicsCompanion(
+        difficulty: drift.Value(difficulty),
+        reviewState: const drift.Value(3),
         lastReviewedAt: drift.Value(nowMs),
         nextReviewAt: drift.Value(nextMs),
       ),
@@ -336,21 +410,21 @@ class TopicsPage extends ConsumerWidget {
 
     final days = ReviewIntervals.daysForDifficulty(difficulty);
     final idx = ReviewIntervals.clampIndex(row.intervalIndex, length: days.length);
-    final nextIdx = ReviewIntervals.clampIndex(idx - 1, length: days.length);
-    final nextDays = days[nextIdx];
 
-    final nextMs = nowMs + Duration(days: nextDays).inMilliseconds;
-
-    await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
-      TopicsCompanion(
-        difficulty: drift.Value(difficulty),
-        intervalIndex: drift.Value(nextIdx),
-        lastReviewedAt: drift.Value(nowMs),
-        nextReviewAt: drift.Value(nextMs),
-      ),
-    );
-
-    ref.invalidate(topicsProvider(currentArgs));
+    if (row.reviewState == 3) {
+      final backIdx = ReviewIntervals.clampIndex(idx - 1, length: days.length);
+      final nextMs = nowMs + Duration(days: days[backIdx]).inMilliseconds;
+      await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
+        TopicsCompanion(
+          reviewState: const drift.Value(1),
+          intervalIndex: drift.Value(backIdx),
+          lastReviewedAt: drift.Value(nowMs),
+          nextReviewAt: drift.Value(nextMs),
+        ),
+      );
+      ref.invalidate(topicsProvider(currentArgs));
+      return;
+    }
   }
 
   Future<void> _startReview(
@@ -360,16 +434,21 @@ class TopicsPage extends ConsumerWidget {
         required int difficulty,
       }) async {
     final db = ref.read(appDatabaseProvider);
-
     final nowMs = DateTime.now().millisecondsSinceEpoch;
 
-    final days = ReviewIntervals.daysForDifficulty(difficulty);
-    final startIdx = 0; // ilk tekrar her zaman yarın
-    final nextMs = nowMs + Duration(days: days[startIdx]).inMilliseconds;
+    final cumulative = ReviewIntervals.daysForDifficulty(difficulty);
+
+    // Gün 0'dayız (öğrenme bitti)
+    final startIdx = 0;
+
+    // İlk tekrar: Gün 1 => gap = cumulative[1] - cumulative[0]
+    final gap = ReviewIntervals.gapDays(cumulative, 0, 1);
+    final nextMs = nowMs + Duration(days: gap).inMilliseconds;
 
     await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
       TopicsCompanion(
         difficulty: drift.Value(difficulty),
+        reviewState: const drift.Value(1),
         intervalIndex: drift.Value(startIdx),
         lastReviewedAt: drift.Value(nowMs),
         nextReviewAt: drift.Value(nextMs),
@@ -440,11 +519,8 @@ class TopicsPage extends ConsumerWidget {
                 itemBuilder: (ctx, i) {
                   final t = topics[i];
                   final tint = MemoryUtils.cardTint(context, now, t.lastReviewedAt, t.nextReviewAt);
-                  final state = MemoryUtils.stateLabel(now, t.lastReviewedAt, t.nextReviewAt);
-                  final memPercent = t.nextReviewAt == null
-                      ? '-'
-                      : '%${MemoryUtils.percent(now, t.lastReviewedAt, t.nextReviewAt)}';
-                  final remainingShort = MemoryUtils.remainingShort(now, t.nextReviewAt);
+                  final remaining = MemoryUtils.remainingShort(now, t.nextReviewAt);
+
                   final subCount = counts[t.id] ?? 0;
                   final hasSubtopics = parentTopicId == null && subCount > 0;
                   final isExpanded = expanded.contains(t.id);
@@ -475,12 +551,6 @@ class TopicsPage extends ConsumerWidget {
                               children: [
                                 Expanded(child: Text('${t.title} (${t.questionCount})')),
                                 const SizedBox(width: 8),
-                                CountdownWithRemaining(
-                                  now: now,
-                                  intervalIndex: t.intervalIndex,
-                                  lastReviewedAt: t.lastReviewedAt,
-                                  nextReviewAt: t.nextReviewAt,
-                                ),
                               ],
                             ),
                             subtitle: Padding(
@@ -488,8 +558,39 @@ class TopicsPage extends ConsumerWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Hafıza: $memPercent ($state) • Unutmaya: $remainingShort'),
-                                  const SizedBox(height: 8),
+                                  MemoryHeader(
+                                    now: now,
+                                    lastReviewedAt: t.lastReviewedAt,
+                                    nextReviewAt: t.nextReviewAt,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  MemoryDecayBar(
+                                    now: now,
+                                    lastReviewedAt: t.lastReviewedAt,
+                                    nextReviewAt: t.nextReviewAt,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const MemoryLegend(),
+                                  if (t.nextReviewAt != null) ...[
+                                    const SizedBox(height: 6),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Text(
+                                        '⏳ $remaining',
+                                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                          fontSize: 11,
+                                          color: Colors.black.withValues(alpha: 0.55),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 10),
+                                  IntervalHeader(
+                                    intervalIndex: t.intervalIndex,
+                                    difficulty: t.difficulty,
+                                    started: t.nextReviewAt != null,
+                                  ),
+                                  const SizedBox(height: 6),
                                   IntervalStrip(
                                     intervalIndex: t.intervalIndex,
                                     difficulty: t.difficulty,

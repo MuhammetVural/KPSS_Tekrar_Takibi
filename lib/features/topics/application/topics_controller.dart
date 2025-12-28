@@ -1,5 +1,7 @@
 
 
+
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kpss_tekrar_takibi/core/db/app_database.dart';
@@ -223,7 +225,35 @@ class MemoryUtils {
     final s = strength(now, lastReviewedAt, nextReviewAt);
     if (s >= 0.75) return 'Taze';
     if (s >= 0.35) return 'Azalıyor';
-    return 'Kritik';
+    if (s >= 0.15) return 'Kritik';
+    return 'Çok kritik';
+  }
+
+  static Color baseColorForStrength(double s) {
+    // MemoryDecayBar segmentleri ile birebir
+    return switch (s) {
+      >= 0.75 => const Color(0xFF43A047), // green
+      >= 0.35 => const Color(0xFFFDD835), // yellow
+      >= 0.15 => const Color(0xFFFB8C00), // orange
+      _ => const Color(0xFFE53935),       // red
+    };
+  }
+
+  static Color stateColor(
+      BuildContext context,
+      DateTime now,
+      int? lastReviewedAt,
+      int? nextReviewAt,
+      ) {
+    if (nextReviewAt == null) {
+      return Colors.black.withValues(alpha: 0.28);
+    }
+    final next = DateTime.fromMillisecondsSinceEpoch(nextReviewAt);
+    if (next.isBefore(now)) {
+      return Theme.of(context).colorScheme.error;
+    }
+    final s = strength(now, lastReviewedAt, nextReviewAt);
+    return baseColorForStrength(s);
   }
 
   static String remainingShort(DateTime now, int? nextReviewAt) {
@@ -264,38 +294,391 @@ class MemoryUtils {
     return '<1 dk';
   }
 
-  static Color? cardTint(BuildContext context, DateTime now, int? lastReviewedAt, int? nextReviewAt) {
+  static Color? cardTint(
+      BuildContext context,
+      DateTime now,
+      int? lastReviewedAt,
+      int? nextReviewAt,
+      ) {
     if (lastReviewedAt == null || nextReviewAt == null) return null;
 
+    final surface = Theme.of(context).colorScheme.surface;
     final next = DateTime.fromMillisecondsSinceEpoch(nextReviewAt);
     if (next.isBefore(now)) {
-      // Unuttun -> kırmızıya sabitle
-      return Theme.of(context).colorScheme.error.withValues(alpha: 0.14);
+      final base = const Color(0xFFE53935); // kırmızı
+      return Color.lerp(base, surface, 0.88); // pastel
     }
 
-    // s: 1.0 full (taze) -> 0.0 empty (unutma)
-    final s = strength(now, lastReviewedAt, nextReviewAt);
-    final risk = (1.0 - s).clamp(0.0, 1.0); // 0 taze, 1 kritik
+    final s = strength(now, lastReviewedAt, nextReviewAt); // 1 taze -> 0 unutma
 
-    final green = Colors.green;
-    final yellow = Colors.amber;
-    final orange = Colors.orange;
-    final red = Theme.of(context).colorScheme.error;
+    // Aynı segment renkleri (MemoryDecayBar ile birebir)
+    final Color base = switch (s) {
+      >= 0.75 => const Color(0xFF43A047), // green
+      >= 0.35 => const Color(0xFFFDD835), // yellow
+      >= 0.15 => const Color(0xFFFB8C00), // orange
+      _ => const Color(0xFFE53935),       // red
+    };
 
-    Color base;
-    if (risk <= 0.33) {
-      // Yeşil -> Sarı
-      base = Color.lerp(green, yellow, risk / 0.33)!;
-    } else if (risk <= 0.66) {
-      // Sarı -> Turuncu
-      base = Color.lerp(yellow, orange, (risk - 0.33) / 0.33)!;
-    } else {
-      // Turuncu -> Kırmızı
-      base = Color.lerp(orange, red, (risk - 0.66) / 0.34)!;
+    // Soft/pastel görünüm: rengi surface ile karıştır
+    return Color.lerp(base, surface, 0.88);
+  }
+}
+
+class MemoryHeader extends StatelessWidget {
+  final DateTime now;
+  final int? lastReviewedAt;
+  final int? nextReviewAt;
+
+  const MemoryHeader({
+    super.key,
+    required this.now,
+    required this.lastReviewedAt,
+    required this.nextReviewAt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = MemoryUtils.stateLabel(now, lastReviewedAt, nextReviewAt);
+    final color = MemoryUtils.stateColor(context, now, lastReviewedAt, nextReviewAt);
+
+    return Row(
+      children: [
+        Text(
+          'Hafıza',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            fontSize: 12,
+            color: Colors.black.withValues(alpha: 0.70),
+          ),
+        ),
+        const Spacer(),
+        _MemoryStatePill(text: label, dotColor: color),
+      ],
+    );
+  }
+}
+
+class _MemoryStatePill extends StatelessWidget {
+  final String text;
+  final Color dotColor;
+
+  const _MemoryStatePill({
+    required this.text,
+    required this.dotColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: Theme.of(context).colorScheme.surface,
+        border: Border.all(color: Colors.black.withValues(alpha: 0.10)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: dotColor,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontSize: 10,
+              color: Colors.black.withValues(alpha: 0.70),
+              height: 1.0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class MemoryLegend extends StatelessWidget {
+  const MemoryLegend({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget item(Color c, String t) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: c),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            t,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontSize: 9,
+              color: Colors.black.withValues(alpha: 0.55),
+              height: 1.0,
+            ),
+          ),
+        ],
+      );
     }
 
-    // Kartın tamamı boyanmasın diye hafif tint
-    return base.withValues(alpha: 0.12);
+    return Wrap(
+      spacing: 10,
+      runSpacing: 4,
+      children: [
+        item(const Color(0xFFE53935), 'Çok kritik'),
+        item(const Color(0xFFFB8C00), 'Kritik'),
+        item(const Color(0xFFFDD835), 'Azalıyor'),
+        item(const Color(0xFF43A047), 'Taze'),
+      ],
+    );
+  }
+}
+
+class IntervalHeader extends StatelessWidget {
+  final int intervalIndex;
+  final int difficulty;
+  final bool started;
+
+  const IntervalHeader({
+    super.key,
+    required this.intervalIndex,
+    required this.difficulty,
+    required this.started,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final days = ReviewIntervals.daysForDifficulty(difficulty);
+    final total = days.isEmpty ? 0 : days.length;
+    final idx = ReviewIntervals.clampIndex(intervalIndex, length: total);
+
+    final label = !started
+        ? 'Başlamadı'
+        : (total <= 0 ? '-' : 'Seviye ${idx + 1}/$total');
+
+    final dotColor = Theme.of(context).colorScheme.primary;
+
+    return Row(
+      children: [
+        Text(
+          'Tekrar planı',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            fontSize: 12,
+            color: Colors.black.withValues(alpha: 0.70),
+          ),
+        ),
+        const Spacer(),
+        _IntervalInfoPill(text: label, dotColor: dotColor),
+      ],
+    );
+  }
+}
+
+class _IntervalInfoPill extends StatelessWidget {
+  final String text;
+  final Color dotColor;
+
+  const _IntervalInfoPill({
+    required this.text,
+    required this.dotColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: Theme.of(context).colorScheme.surface,
+        border: Border.all(color: Colors.black.withValues(alpha: 0.10)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: dotColor,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontSize: 10,
+              color: Colors.black.withValues(alpha: 0.70),
+              height: 1.0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class MemoryDecayBar extends StatelessWidget {
+  final DateTime now;
+  final int? lastReviewedAt;
+  final int? nextReviewAt;
+
+  const MemoryDecayBar({
+    super.key,
+    required this.now,
+    required this.lastReviewedAt,
+    required this.nextReviewAt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final started = lastReviewedAt != null && nextReviewAt != null;
+    if (!started) {
+      // başlamadıysa soluk gri bar
+      return Container(
+        height: 16,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          color: Colors.black.withValues(alpha: 0.06),
+          border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+        ),
+      );
+    }
+
+    final next = DateTime.fromMillisecondsSinceEpoch(nextReviewAt!);
+    final overdue = next.isBefore(now);
+
+    // 1.0 (taze) -> 0.0 (unutma)
+    final s = overdue ? 0.0 : MemoryUtils.strength(now, lastReviewedAt, nextReviewAt);
+    final x = s.clamp(0.0, 1.0); // sağdan başlayacak
+
+    // Segmentler: soldan sağa (kırmızı -> turuncu -> sarı -> yeşil)
+    // Not: Top sağdan başladığı için taze bölge sağda (yeşil) oluyor.
+    const seg = [
+      (0.00, 0.15, Color(0xFFE53935)), // red
+      (0.15, 0.35, Color(0xFFFB8C00)), // orange
+      (0.35, 0.75, Color(0xFFFDD835)), // yellow
+      (0.75, 1.00, Color(0xFF43A047)), // green
+    ];
+
+    Color thumbColor(double v) {
+      for (final (a, b, c) in seg) {
+        if (v >= a && v <= b) return c;
+      }
+      return seg.last.$3;
+    }
+
+    final tColor = overdue ? Theme.of(context).colorScheme.error : thumbColor(x);
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final p = MemoryUtils.percent(now, lastReviewedAt, nextReviewAt); // 0-100
+        final alignX = (x * 2) - 1; // 0..1 -> -1..1 (Align için)
+        final w = c.maxWidth;
+        final h = 16.0;
+        final r = 10.0; // thumb radius
+        final knobSize = 20.0;
+
+        // knob center x: 0..w
+        final cx = (x * w).clamp(0.0, w);
+        // knob left
+        final left = (cx - knobSize / 2).clamp(0.0, w - knobSize);
+
+        // sağdaki gri (geçen süre): x..1.0
+        final greyWidth = ((1.0 - x) * w).clamp(0.0, w);
+
+        return SizedBox(
+          height: 44,
+          child: Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              // renkli segment bar
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: SizedBox(
+                  height: h,
+                  child: Row(
+                    children: [
+                      Expanded(flex: 15, child: Container(color: seg[0].$3)),
+                      Expanded(flex: 20, child: Container(color: seg[1].$3)),
+                      Expanded(flex: 40, child: Container(color: seg[2].$3)),
+                      Expanded(flex: 25, child: Container(color: seg[3].$3)),
+                    ],
+                  ),
+                ),
+              ),
+
+              // sağ tarafı gri yap (bitmiş/harcanmış kısım)
+              Positioned(
+                right: 0,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    height: h,
+                    width: greyWidth,
+                    color: Colors.black.withValues(alpha: 0.12),
+                  ),
+                ),
+              ),
+
+              // bar border (soft)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+                    ),
+                  ),
+                ),
+              ),
+
+              // knob / top
+              Positioned(
+                left: left,
+                child: Container(
+                  width: knobSize,
+                  height: knobSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Theme.of(context).colorScheme.surface,
+                    border: Border.all(color: tColor, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // yüzde etiketi (topun altında)
+              Align(
+                alignment: Alignment(alignX, 1),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 22, left: 22), // bar(16) + boşluk
+                  child: Text(
+                    '%$p',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontSize: 10,
+                      color: Colors.black.withValues(alpha: 0.55),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -311,49 +694,190 @@ class IntervalStrip extends StatelessWidget {
     this.started = true,
   });
 
+
+
   @override
   Widget build(BuildContext context) {
-    final items = ReviewIntervals.daysForDifficulty(difficulty);
-    final idx = ReviewIntervals.clampIndex(intervalIndex, length: items.length);
-    final activeIdx = started ? idx : -1; // başlamadıysa tüm hat soluk
+    final days = ReviewIntervals.daysForDifficulty(difficulty);
+    final idx = ReviewIntervals.clampIndex(intervalIndex, length: days.length);
 
-    final active = Theme.of(context).colorScheme.primary;
-    final inactiveLine = Colors.black.withValues(alpha: 0.12);
-    final inactiveBorder = Colors.black.withValues(alpha: 0.22);
+    final activeIdx = started ? idx : -1;
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (int i = 0; i < items.length; i++) ...[
-              IntervalNode(
-                level: i + 1,
-                day: items[i],
-                showLabels: started,
-                active: i <= activeIdx,
-                activeColor: active,
-                inactiveBorderColor: inactiveBorder,
-              ),
-              if (i != items.length - 1)
-                Padding(
-                  padding: const EdgeInsets.only(top: 5.5),
+    final activeColor = Theme.of(context).colorScheme.primary;
+    final inactiveColor = Colors.black.withValues(alpha: 0.18);
+    final tickInactive = Colors.black.withValues(alpha: 0.22);
+
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final w = c.maxWidth;
+        if (w <= 0 || days.isEmpty) return const SizedBox.shrink();
+
+        // xs: nokta pozisyonları (0..w)
+        // Etiketler sığsın diye her segment için min genişlik + kalan alanı yumuşatılmış oranla dağıt.
+        final xs = <double>[0.0];
+
+        // segment süreleri: iki nokta arası fark
+        final gaps = <int>[];
+        for (int i = 0; i < days.length - 1; i++) {
+          gaps.add((days[i + 1] - days[i]).abs());
+        }
+
+        final segCount = gaps.length;
+
+        if (segCount == 0) {
+          // tek nokta varsa (days length 1)
+          xs.add(w);
+        } else {
+          // 1) min segment genişliği (etiket sığsın diye)
+          // Ekran dar olursa otomatik küçülür.
+          double minSegPx = 48; // 44-52 arası oynatabilirsin
+          final maxMin = w / segCount;
+          if (minSegPx > maxMin) minSegPx = maxMin;
+
+          // 2) ağırlıklar: log1p ile “çok orantısız” görünmeden dağıt
+          final weights = gaps
+              .map((g) => math.log(g.toDouble() + 1.0))
+              .toList();
+
+          final totalW = weights.fold<double>(0.0, (a, b) => a + b);
+          final free = (w - (minSegPx * segCount)).clamp(0.0, w);
+
+          double acc = 0.0;
+          for (int i = 0; i < segCount; i++) {
+            final share = (totalW <= 0)
+                ? (free / segCount)
+                : (free * (weights[i] / totalW));
+            final segWidth = minSegPx + share;
+            acc += segWidth;
+            xs.add(acc.clamp(0.0, w));
+          }
+        }
+
+        final knobX = (activeIdx < 0) ? null : xs[activeIdx].clamp(0.0, w);
+
+        const trackH = 2.0;
+        const tickH = 10.0;
+        const knobSize = 16.0;
+
+        final trackTop = 8.0;
+
+        Widget buildTrack() {
+          return SizedBox(
+            height: 26,
+            child: Stack(
+              children: [
+                // base track
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: trackTop,
                   child: Container(
-                    width: 22,
-                    height: 3,
+                    height: trackH,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(99),
-                      color: (i < activeIdx) ? active : inactiveLine,
+                      color: inactiveColor,
                     ),
                   ),
                 ),
-            ],
+
+                // active track (0 -> knob)
+                if (knobX != null)
+                  Positioned(
+                    left: 0,
+                    top: trackTop,
+                    child: Container(
+                      height: trackH,
+                      width: knobX,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(99),
+                        color: activeColor,
+                      ),
+                    ),
+                  ),
+
+                // ticks
+                for (int i = 0; i < xs.length; i++)
+                  Positioned(
+                    left: xs[i] - 0.5,
+                    top: trackTop - ((tickH - trackH) / 2),
+                    child: Container(
+                      width: 1,
+                      height: tickH,
+                      color: (activeIdx >= 0 && i <= activeIdx) ? activeColor : tickInactive,
+                    ),
+                  ),
+
+                // knob
+                if (knobX != null)
+                  Positioned(
+                    left: (knobX - knobSize / 2).clamp(0.0, w - knobSize),
+                    top: trackTop - (knobSize - trackH) / 2,
+                    child: Container(
+                      width: knobSize,
+                      height: knobSize,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Theme.of(context).colorScheme.surface,
+                        border: Border.all(color: activeColor, width: 3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.10),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }
+
+        Widget buildLabels() {
+          if (!started) return const SizedBox.shrink();
+
+          const labelW = 56.0;
+
+          return SizedBox(
+            height: 20,
+            child: Stack(
+              children: [
+                for (int i = 0; i < gaps.length; i++)
+                  Positioned(
+                    left: (((xs[i] + xs[i + 1]) / 2) - (labelW / 2))
+                        .clamp(0.0, w - labelW),
+                    top: 0,
+                    width: labelW,
+                    child: Text(
+                      '${gaps[i]} Gün',
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.clip,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        fontSize: 10,
+                        height: 1.0,
+                        // segment tamamlandıysa renklendir: i < activeIdx
+                        color: (activeIdx >= 0 && i < activeIdx)
+                            ? activeColor
+                            : Colors.black.withValues(alpha: 0.45),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            buildTrack(),
+            buildLabels(),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -378,7 +902,7 @@ class IntervalNode extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const dotSize = 14.0;
+    const dotSize = 10.0;
 
     final labelColor =
     active ? activeColor : Colors.black.withValues(alpha: 0.45);
@@ -386,7 +910,7 @@ class IntervalNode extends StatelessWidget {
     // Başlamadıysa sadece soluk hat + nokta (label yok)
     if (!showLabels) {
       return SizedBox(
-        width: 22,
+        width: 18,
         height: dotSize,
         child: Center(
           child: Container(

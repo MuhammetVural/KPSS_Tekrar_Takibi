@@ -572,6 +572,30 @@ class $TopicsTable extends Topics with TableInfo<$TopicsTable, Topic> {
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
+  static const VerificationMeta _reviewStateMeta = const VerificationMeta(
+    'reviewState',
+  );
+  @override
+  late final GeneratedColumn<int> reviewState = GeneratedColumn<int>(
+    'review_state',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _maintenanceDaysMeta = const VerificationMeta(
+    'maintenanceDays',
+  );
+  @override
+  late final GeneratedColumn<int> maintenanceDays = GeneratedColumn<int>(
+    'maintenance_days',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(30),
+  );
   static const VerificationMeta _questionCountMeta = const VerificationMeta(
     'questionCount',
   );
@@ -652,6 +676,8 @@ class $TopicsTable extends Topics with TableInfo<$TopicsTable, Topic> {
     parentTopicId,
     title,
     difficulty,
+    reviewState,
+    maintenanceDays,
     questionCount,
     intervalIndex,
     lastReviewedAt,
@@ -705,6 +731,24 @@ class $TopicsTable extends Topics with TableInfo<$TopicsTable, Topic> {
       context.handle(
         _difficultyMeta,
         difficulty.isAcceptableOrUnknown(data['difficulty']!, _difficultyMeta),
+      );
+    }
+    if (data.containsKey('review_state')) {
+      context.handle(
+        _reviewStateMeta,
+        reviewState.isAcceptableOrUnknown(
+          data['review_state']!,
+          _reviewStateMeta,
+        ),
+      );
+    }
+    if (data.containsKey('maintenance_days')) {
+      context.handle(
+        _maintenanceDaysMeta,
+        maintenanceDays.isAcceptableOrUnknown(
+          data['maintenance_days']!,
+          _maintenanceDaysMeta,
+        ),
       );
     }
     if (data.containsKey('question_count')) {
@@ -784,6 +828,14 @@ class $TopicsTable extends Topics with TableInfo<$TopicsTable, Topic> {
         DriftSqlType.int,
         data['${effectivePrefix}difficulty'],
       )!,
+      reviewState: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}review_state'],
+      )!,
+      maintenanceDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}maintenance_days'],
+      )!,
       questionCount: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}question_count'],
@@ -826,6 +878,12 @@ class Topic extends DataClass implements Insertable<Topic> {
   final String? parentTopicId;
   final String title;
   final int difficulty;
+
+  /// 0=notStarted, 1=active, 2=completed, 3=maintenance
+  final int reviewState;
+
+  /// Bakım modunda tekrar aralığı (gün). Default: 30
+  final int maintenanceDays;
   final int questionCount;
   final int intervalIndex;
 
@@ -844,6 +902,8 @@ class Topic extends DataClass implements Insertable<Topic> {
     this.parentTopicId,
     required this.title,
     required this.difficulty,
+    required this.reviewState,
+    required this.maintenanceDays,
     required this.questionCount,
     required this.intervalIndex,
     this.lastReviewedAt,
@@ -861,6 +921,8 @@ class Topic extends DataClass implements Insertable<Topic> {
     }
     map['title'] = Variable<String>(title);
     map['difficulty'] = Variable<int>(difficulty);
+    map['review_state'] = Variable<int>(reviewState);
+    map['maintenance_days'] = Variable<int>(maintenanceDays);
     map['question_count'] = Variable<int>(questionCount);
     map['interval_index'] = Variable<int>(intervalIndex);
     if (!nullToAbsent || lastReviewedAt != null) {
@@ -883,6 +945,8 @@ class Topic extends DataClass implements Insertable<Topic> {
           : Value(parentTopicId),
       title: Value(title),
       difficulty: Value(difficulty),
+      reviewState: Value(reviewState),
+      maintenanceDays: Value(maintenanceDays),
       questionCount: Value(questionCount),
       intervalIndex: Value(intervalIndex),
       lastReviewedAt: lastReviewedAt == null && nullToAbsent
@@ -907,6 +971,8 @@ class Topic extends DataClass implements Insertable<Topic> {
       parentTopicId: serializer.fromJson<String?>(json['parentTopicId']),
       title: serializer.fromJson<String>(json['title']),
       difficulty: serializer.fromJson<int>(json['difficulty']),
+      reviewState: serializer.fromJson<int>(json['reviewState']),
+      maintenanceDays: serializer.fromJson<int>(json['maintenanceDays']),
       questionCount: serializer.fromJson<int>(json['questionCount']),
       intervalIndex: serializer.fromJson<int>(json['intervalIndex']),
       lastReviewedAt: serializer.fromJson<int?>(json['lastReviewedAt']),
@@ -924,6 +990,8 @@ class Topic extends DataClass implements Insertable<Topic> {
       'parentTopicId': serializer.toJson<String?>(parentTopicId),
       'title': serializer.toJson<String>(title),
       'difficulty': serializer.toJson<int>(difficulty),
+      'reviewState': serializer.toJson<int>(reviewState),
+      'maintenanceDays': serializer.toJson<int>(maintenanceDays),
       'questionCount': serializer.toJson<int>(questionCount),
       'intervalIndex': serializer.toJson<int>(intervalIndex),
       'lastReviewedAt': serializer.toJson<int?>(lastReviewedAt),
@@ -939,6 +1007,8 @@ class Topic extends DataClass implements Insertable<Topic> {
     Value<String?> parentTopicId = const Value.absent(),
     String? title,
     int? difficulty,
+    int? reviewState,
+    int? maintenanceDays,
     int? questionCount,
     int? intervalIndex,
     Value<int?> lastReviewedAt = const Value.absent(),
@@ -953,6 +1023,8 @@ class Topic extends DataClass implements Insertable<Topic> {
         : this.parentTopicId,
     title: title ?? this.title,
     difficulty: difficulty ?? this.difficulty,
+    reviewState: reviewState ?? this.reviewState,
+    maintenanceDays: maintenanceDays ?? this.maintenanceDays,
     questionCount: questionCount ?? this.questionCount,
     intervalIndex: intervalIndex ?? this.intervalIndex,
     lastReviewedAt: lastReviewedAt.present
@@ -973,6 +1045,12 @@ class Topic extends DataClass implements Insertable<Topic> {
       difficulty: data.difficulty.present
           ? data.difficulty.value
           : this.difficulty,
+      reviewState: data.reviewState.present
+          ? data.reviewState.value
+          : this.reviewState,
+      maintenanceDays: data.maintenanceDays.present
+          ? data.maintenanceDays.value
+          : this.maintenanceDays,
       questionCount: data.questionCount.present
           ? data.questionCount.value
           : this.questionCount,
@@ -998,6 +1076,8 @@ class Topic extends DataClass implements Insertable<Topic> {
           ..write('parentTopicId: $parentTopicId, ')
           ..write('title: $title, ')
           ..write('difficulty: $difficulty, ')
+          ..write('reviewState: $reviewState, ')
+          ..write('maintenanceDays: $maintenanceDays, ')
           ..write('questionCount: $questionCount, ')
           ..write('intervalIndex: $intervalIndex, ')
           ..write('lastReviewedAt: $lastReviewedAt, ')
@@ -1015,6 +1095,8 @@ class Topic extends DataClass implements Insertable<Topic> {
     parentTopicId,
     title,
     difficulty,
+    reviewState,
+    maintenanceDays,
     questionCount,
     intervalIndex,
     lastReviewedAt,
@@ -1031,6 +1113,8 @@ class Topic extends DataClass implements Insertable<Topic> {
           other.parentTopicId == this.parentTopicId &&
           other.title == this.title &&
           other.difficulty == this.difficulty &&
+          other.reviewState == this.reviewState &&
+          other.maintenanceDays == this.maintenanceDays &&
           other.questionCount == this.questionCount &&
           other.intervalIndex == this.intervalIndex &&
           other.lastReviewedAt == this.lastReviewedAt &&
@@ -1045,6 +1129,8 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
   final Value<String?> parentTopicId;
   final Value<String> title;
   final Value<int> difficulty;
+  final Value<int> reviewState;
+  final Value<int> maintenanceDays;
   final Value<int> questionCount;
   final Value<int> intervalIndex;
   final Value<int?> lastReviewedAt;
@@ -1058,6 +1144,8 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
     this.parentTopicId = const Value.absent(),
     this.title = const Value.absent(),
     this.difficulty = const Value.absent(),
+    this.reviewState = const Value.absent(),
+    this.maintenanceDays = const Value.absent(),
     this.questionCount = const Value.absent(),
     this.intervalIndex = const Value.absent(),
     this.lastReviewedAt = const Value.absent(),
@@ -1072,6 +1160,8 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
     this.parentTopicId = const Value.absent(),
     required String title,
     this.difficulty = const Value.absent(),
+    this.reviewState = const Value.absent(),
+    this.maintenanceDays = const Value.absent(),
     this.questionCount = const Value.absent(),
     this.intervalIndex = const Value.absent(),
     this.lastReviewedAt = const Value.absent(),
@@ -1088,6 +1178,8 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
     Expression<String>? parentTopicId,
     Expression<String>? title,
     Expression<int>? difficulty,
+    Expression<int>? reviewState,
+    Expression<int>? maintenanceDays,
     Expression<int>? questionCount,
     Expression<int>? intervalIndex,
     Expression<int>? lastReviewedAt,
@@ -1102,6 +1194,8 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
       if (parentTopicId != null) 'parent_topic_id': parentTopicId,
       if (title != null) 'title': title,
       if (difficulty != null) 'difficulty': difficulty,
+      if (reviewState != null) 'review_state': reviewState,
+      if (maintenanceDays != null) 'maintenance_days': maintenanceDays,
       if (questionCount != null) 'question_count': questionCount,
       if (intervalIndex != null) 'interval_index': intervalIndex,
       if (lastReviewedAt != null) 'last_reviewed_at': lastReviewedAt,
@@ -1118,6 +1212,8 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
     Value<String?>? parentTopicId,
     Value<String>? title,
     Value<int>? difficulty,
+    Value<int>? reviewState,
+    Value<int>? maintenanceDays,
     Value<int>? questionCount,
     Value<int>? intervalIndex,
     Value<int?>? lastReviewedAt,
@@ -1132,6 +1228,8 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
       parentTopicId: parentTopicId ?? this.parentTopicId,
       title: title ?? this.title,
       difficulty: difficulty ?? this.difficulty,
+      reviewState: reviewState ?? this.reviewState,
+      maintenanceDays: maintenanceDays ?? this.maintenanceDays,
       questionCount: questionCount ?? this.questionCount,
       intervalIndex: intervalIndex ?? this.intervalIndex,
       lastReviewedAt: lastReviewedAt ?? this.lastReviewedAt,
@@ -1159,6 +1257,12 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
     }
     if (difficulty.present) {
       map['difficulty'] = Variable<int>(difficulty.value);
+    }
+    if (reviewState.present) {
+      map['review_state'] = Variable<int>(reviewState.value);
+    }
+    if (maintenanceDays.present) {
+      map['maintenance_days'] = Variable<int>(maintenanceDays.value);
     }
     if (questionCount.present) {
       map['question_count'] = Variable<int>(questionCount.value);
@@ -1192,6 +1296,8 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
           ..write('parentTopicId: $parentTopicId, ')
           ..write('title: $title, ')
           ..write('difficulty: $difficulty, ')
+          ..write('reviewState: $reviewState, ')
+          ..write('maintenanceDays: $maintenanceDays, ')
           ..write('questionCount: $questionCount, ')
           ..write('intervalIndex: $intervalIndex, ')
           ..write('lastReviewedAt: $lastReviewedAt, ')
@@ -1830,6 +1936,8 @@ typedef $$TopicsTableCreateCompanionBuilder =
       Value<String?> parentTopicId,
       required String title,
       Value<int> difficulty,
+      Value<int> reviewState,
+      Value<int> maintenanceDays,
       Value<int> questionCount,
       Value<int> intervalIndex,
       Value<int?> lastReviewedAt,
@@ -1845,6 +1953,8 @@ typedef $$TopicsTableUpdateCompanionBuilder =
       Value<String?> parentTopicId,
       Value<String> title,
       Value<int> difficulty,
+      Value<int> reviewState,
+      Value<int> maintenanceDays,
       Value<int> questionCount,
       Value<int> intervalIndex,
       Value<int?> lastReviewedAt,
@@ -1902,6 +2012,16 @@ class $$TopicsTableFilterComposer
 
   ColumnFilters<int> get difficulty => $composableBuilder(
     column: $table.difficulty,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get reviewState => $composableBuilder(
+    column: $table.reviewState,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get maintenanceDays => $composableBuilder(
+    column: $table.maintenanceDays,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1988,6 +2108,16 @@ class $$TopicsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get reviewState => $composableBuilder(
+    column: $table.reviewState,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get maintenanceDays => $composableBuilder(
+    column: $table.maintenanceDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get questionCount => $composableBuilder(
     column: $table.questionCount,
     builder: (column) => ColumnOrderings(column),
@@ -2064,6 +2194,16 @@ class $$TopicsTableAnnotationComposer
 
   GeneratedColumn<int> get difficulty => $composableBuilder(
     column: $table.difficulty,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get reviewState => $composableBuilder(
+    column: $table.reviewState,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get maintenanceDays => $composableBuilder(
+    column: $table.maintenanceDays,
     builder: (column) => column,
   );
 
@@ -2150,6 +2290,8 @@ class $$TopicsTableTableManager
                 Value<String?> parentTopicId = const Value.absent(),
                 Value<String> title = const Value.absent(),
                 Value<int> difficulty = const Value.absent(),
+                Value<int> reviewState = const Value.absent(),
+                Value<int> maintenanceDays = const Value.absent(),
                 Value<int> questionCount = const Value.absent(),
                 Value<int> intervalIndex = const Value.absent(),
                 Value<int?> lastReviewedAt = const Value.absent(),
@@ -2163,6 +2305,8 @@ class $$TopicsTableTableManager
                 parentTopicId: parentTopicId,
                 title: title,
                 difficulty: difficulty,
+                reviewState: reviewState,
+                maintenanceDays: maintenanceDays,
                 questionCount: questionCount,
                 intervalIndex: intervalIndex,
                 lastReviewedAt: lastReviewedAt,
@@ -2178,6 +2322,8 @@ class $$TopicsTableTableManager
                 Value<String?> parentTopicId = const Value.absent(),
                 required String title,
                 Value<int> difficulty = const Value.absent(),
+                Value<int> reviewState = const Value.absent(),
+                Value<int> maintenanceDays = const Value.absent(),
                 Value<int> questionCount = const Value.absent(),
                 Value<int> intervalIndex = const Value.absent(),
                 Value<int?> lastReviewedAt = const Value.absent(),
@@ -2191,6 +2337,8 @@ class $$TopicsTableTableManager
                 parentTopicId: parentTopicId,
                 title: title,
                 difficulty: difficulty,
+                reviewState: reviewState,
+                maintenanceDays: maintenanceDays,
                 questionCount: questionCount,
                 intervalIndex: intervalIndex,
                 lastReviewedAt: lastReviewedAt,

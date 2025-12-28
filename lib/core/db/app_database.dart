@@ -40,6 +40,12 @@ class Topics extends Table {
 
   IntColumn get difficulty => integer().withDefault(const Constant(1))();
 
+  /// 0=notStarted, 1=active, 2=completed, 3=maintenance
+  IntColumn get reviewState => integer().withDefault(const Constant(0))();
+
+  /// Bakım modunda tekrar aralığı (gün). Default: 30
+  IntColumn get maintenanceDays => integer().withDefault(const Constant(30))();
+
   IntColumn get questionCount => integer().withDefault(const Constant(0))();
 
   IntColumn get intervalIndex => integer().withDefault(const Constant(0))();
@@ -64,7 +70,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -73,7 +79,7 @@ class AppDatabase extends _$AppDatabase {
     },
     onUpgrade: (m, from, to) async {
       // v2: Topics tablosuna parentTopicId eklendi
-      if (from < 3) {
+      if (from < 4) {
         await m.addColumn(topics, topics.parentTopicId);
       }
     },
