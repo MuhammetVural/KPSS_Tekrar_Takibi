@@ -539,6 +539,18 @@ class $TopicsTable extends Topics with TableInfo<$TopicsTable, Topic> {
       'REFERENCES subjects (id)',
     ),
   );
+  static const VerificationMeta _parentTopicIdMeta = const VerificationMeta(
+    'parentTopicId',
+  );
+  @override
+  late final GeneratedColumn<String> parentTopicId = GeneratedColumn<String>(
+    'parent_topic_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    $customConstraints: 'NULL REFERENCES topics(id)',
+  );
   static const VerificationMeta _titleMeta = const VerificationMeta('title');
   @override
   late final GeneratedColumn<String> title = GeneratedColumn<String>(
@@ -547,6 +559,18 @@ class $TopicsTable extends Topics with TableInfo<$TopicsTable, Topic> {
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
+  );
+  static const VerificationMeta _difficultyMeta = const VerificationMeta(
+    'difficulty',
+  );
+  @override
+  late final GeneratedColumn<int> difficulty = GeneratedColumn<int>(
+    'difficulty',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
   );
   static const VerificationMeta _questionCountMeta = const VerificationMeta(
     'questionCount',
@@ -625,7 +649,9 @@ class $TopicsTable extends Topics with TableInfo<$TopicsTable, Topic> {
   List<GeneratedColumn> get $columns => [
     id,
     subjectId,
+    parentTopicId,
     title,
+    difficulty,
     questionCount,
     intervalIndex,
     lastReviewedAt,
@@ -658,6 +684,15 @@ class $TopicsTable extends Topics with TableInfo<$TopicsTable, Topic> {
     } else if (isInserting) {
       context.missing(_subjectIdMeta);
     }
+    if (data.containsKey('parent_topic_id')) {
+      context.handle(
+        _parentTopicIdMeta,
+        parentTopicId.isAcceptableOrUnknown(
+          data['parent_topic_id']!,
+          _parentTopicIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('title')) {
       context.handle(
         _titleMeta,
@@ -665,6 +700,12 @@ class $TopicsTable extends Topics with TableInfo<$TopicsTable, Topic> {
       );
     } else if (isInserting) {
       context.missing(_titleMeta);
+    }
+    if (data.containsKey('difficulty')) {
+      context.handle(
+        _difficultyMeta,
+        difficulty.isAcceptableOrUnknown(data['difficulty']!, _difficultyMeta),
+      );
     }
     if (data.containsKey('question_count')) {
       context.handle(
@@ -731,9 +772,17 @@ class $TopicsTable extends Topics with TableInfo<$TopicsTable, Topic> {
         DriftSqlType.string,
         data['${effectivePrefix}subject_id'],
       )!,
+      parentTopicId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_topic_id'],
+      ),
       title: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}title'],
+      )!,
+      difficulty: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}difficulty'],
       )!,
       questionCount: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -771,7 +820,12 @@ class $TopicsTable extends Topics with TableInfo<$TopicsTable, Topic> {
 class Topic extends DataClass implements Insertable<Topic> {
   final String id;
   final String subjectId;
+
+  /// Alt konu desteği (parent topic). Null ise ana konudur.
+  /// Self-reference için customConstraint kullanıyoruz.
+  final String? parentTopicId;
   final String title;
+  final int difficulty;
   final int questionCount;
   final int intervalIndex;
 
@@ -787,7 +841,9 @@ class Topic extends DataClass implements Insertable<Topic> {
   const Topic({
     required this.id,
     required this.subjectId,
+    this.parentTopicId,
     required this.title,
+    required this.difficulty,
     required this.questionCount,
     required this.intervalIndex,
     this.lastReviewedAt,
@@ -800,7 +856,11 @@ class Topic extends DataClass implements Insertable<Topic> {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
     map['subject_id'] = Variable<String>(subjectId);
+    if (!nullToAbsent || parentTopicId != null) {
+      map['parent_topic_id'] = Variable<String>(parentTopicId);
+    }
     map['title'] = Variable<String>(title);
+    map['difficulty'] = Variable<int>(difficulty);
     map['question_count'] = Variable<int>(questionCount);
     map['interval_index'] = Variable<int>(intervalIndex);
     if (!nullToAbsent || lastReviewedAt != null) {
@@ -818,7 +878,11 @@ class Topic extends DataClass implements Insertable<Topic> {
     return TopicsCompanion(
       id: Value(id),
       subjectId: Value(subjectId),
+      parentTopicId: parentTopicId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentTopicId),
       title: Value(title),
+      difficulty: Value(difficulty),
       questionCount: Value(questionCount),
       intervalIndex: Value(intervalIndex),
       lastReviewedAt: lastReviewedAt == null && nullToAbsent
@@ -840,7 +904,9 @@ class Topic extends DataClass implements Insertable<Topic> {
     return Topic(
       id: serializer.fromJson<String>(json['id']),
       subjectId: serializer.fromJson<String>(json['subjectId']),
+      parentTopicId: serializer.fromJson<String?>(json['parentTopicId']),
       title: serializer.fromJson<String>(json['title']),
+      difficulty: serializer.fromJson<int>(json['difficulty']),
       questionCount: serializer.fromJson<int>(json['questionCount']),
       intervalIndex: serializer.fromJson<int>(json['intervalIndex']),
       lastReviewedAt: serializer.fromJson<int?>(json['lastReviewedAt']),
@@ -855,7 +921,9 @@ class Topic extends DataClass implements Insertable<Topic> {
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'subjectId': serializer.toJson<String>(subjectId),
+      'parentTopicId': serializer.toJson<String?>(parentTopicId),
       'title': serializer.toJson<String>(title),
+      'difficulty': serializer.toJson<int>(difficulty),
       'questionCount': serializer.toJson<int>(questionCount),
       'intervalIndex': serializer.toJson<int>(intervalIndex),
       'lastReviewedAt': serializer.toJson<int?>(lastReviewedAt),
@@ -868,7 +936,9 @@ class Topic extends DataClass implements Insertable<Topic> {
   Topic copyWith({
     String? id,
     String? subjectId,
+    Value<String?> parentTopicId = const Value.absent(),
     String? title,
+    int? difficulty,
     int? questionCount,
     int? intervalIndex,
     Value<int?> lastReviewedAt = const Value.absent(),
@@ -878,7 +948,11 @@ class Topic extends DataClass implements Insertable<Topic> {
   }) => Topic(
     id: id ?? this.id,
     subjectId: subjectId ?? this.subjectId,
+    parentTopicId: parentTopicId.present
+        ? parentTopicId.value
+        : this.parentTopicId,
     title: title ?? this.title,
+    difficulty: difficulty ?? this.difficulty,
     questionCount: questionCount ?? this.questionCount,
     intervalIndex: intervalIndex ?? this.intervalIndex,
     lastReviewedAt: lastReviewedAt.present
@@ -892,7 +966,13 @@ class Topic extends DataClass implements Insertable<Topic> {
     return Topic(
       id: data.id.present ? data.id.value : this.id,
       subjectId: data.subjectId.present ? data.subjectId.value : this.subjectId,
+      parentTopicId: data.parentTopicId.present
+          ? data.parentTopicId.value
+          : this.parentTopicId,
       title: data.title.present ? data.title.value : this.title,
+      difficulty: data.difficulty.present
+          ? data.difficulty.value
+          : this.difficulty,
       questionCount: data.questionCount.present
           ? data.questionCount.value
           : this.questionCount,
@@ -915,7 +995,9 @@ class Topic extends DataClass implements Insertable<Topic> {
     return (StringBuffer('Topic(')
           ..write('id: $id, ')
           ..write('subjectId: $subjectId, ')
+          ..write('parentTopicId: $parentTopicId, ')
           ..write('title: $title, ')
+          ..write('difficulty: $difficulty, ')
           ..write('questionCount: $questionCount, ')
           ..write('intervalIndex: $intervalIndex, ')
           ..write('lastReviewedAt: $lastReviewedAt, ')
@@ -930,7 +1012,9 @@ class Topic extends DataClass implements Insertable<Topic> {
   int get hashCode => Object.hash(
     id,
     subjectId,
+    parentTopicId,
     title,
+    difficulty,
     questionCount,
     intervalIndex,
     lastReviewedAt,
@@ -944,7 +1028,9 @@ class Topic extends DataClass implements Insertable<Topic> {
       (other is Topic &&
           other.id == this.id &&
           other.subjectId == this.subjectId &&
+          other.parentTopicId == this.parentTopicId &&
           other.title == this.title &&
+          other.difficulty == this.difficulty &&
           other.questionCount == this.questionCount &&
           other.intervalIndex == this.intervalIndex &&
           other.lastReviewedAt == this.lastReviewedAt &&
@@ -956,7 +1042,9 @@ class Topic extends DataClass implements Insertable<Topic> {
 class TopicsCompanion extends UpdateCompanion<Topic> {
   final Value<String> id;
   final Value<String> subjectId;
+  final Value<String?> parentTopicId;
   final Value<String> title;
+  final Value<int> difficulty;
   final Value<int> questionCount;
   final Value<int> intervalIndex;
   final Value<int?> lastReviewedAt;
@@ -967,7 +1055,9 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
   const TopicsCompanion({
     this.id = const Value.absent(),
     this.subjectId = const Value.absent(),
+    this.parentTopicId = const Value.absent(),
     this.title = const Value.absent(),
+    this.difficulty = const Value.absent(),
     this.questionCount = const Value.absent(),
     this.intervalIndex = const Value.absent(),
     this.lastReviewedAt = const Value.absent(),
@@ -979,7 +1069,9 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
   TopicsCompanion.insert({
     required String id,
     required String subjectId,
+    this.parentTopicId = const Value.absent(),
     required String title,
+    this.difficulty = const Value.absent(),
     this.questionCount = const Value.absent(),
     this.intervalIndex = const Value.absent(),
     this.lastReviewedAt = const Value.absent(),
@@ -993,7 +1085,9 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
   static Insertable<Topic> custom({
     Expression<String>? id,
     Expression<String>? subjectId,
+    Expression<String>? parentTopicId,
     Expression<String>? title,
+    Expression<int>? difficulty,
     Expression<int>? questionCount,
     Expression<int>? intervalIndex,
     Expression<int>? lastReviewedAt,
@@ -1005,7 +1099,9 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (subjectId != null) 'subject_id': subjectId,
+      if (parentTopicId != null) 'parent_topic_id': parentTopicId,
       if (title != null) 'title': title,
+      if (difficulty != null) 'difficulty': difficulty,
       if (questionCount != null) 'question_count': questionCount,
       if (intervalIndex != null) 'interval_index': intervalIndex,
       if (lastReviewedAt != null) 'last_reviewed_at': lastReviewedAt,
@@ -1019,7 +1115,9 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
   TopicsCompanion copyWith({
     Value<String>? id,
     Value<String>? subjectId,
+    Value<String?>? parentTopicId,
     Value<String>? title,
+    Value<int>? difficulty,
     Value<int>? questionCount,
     Value<int>? intervalIndex,
     Value<int?>? lastReviewedAt,
@@ -1031,7 +1129,9 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
     return TopicsCompanion(
       id: id ?? this.id,
       subjectId: subjectId ?? this.subjectId,
+      parentTopicId: parentTopicId ?? this.parentTopicId,
       title: title ?? this.title,
+      difficulty: difficulty ?? this.difficulty,
       questionCount: questionCount ?? this.questionCount,
       intervalIndex: intervalIndex ?? this.intervalIndex,
       lastReviewedAt: lastReviewedAt ?? this.lastReviewedAt,
@@ -1051,8 +1151,14 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
     if (subjectId.present) {
       map['subject_id'] = Variable<String>(subjectId.value);
     }
+    if (parentTopicId.present) {
+      map['parent_topic_id'] = Variable<String>(parentTopicId.value);
+    }
     if (title.present) {
       map['title'] = Variable<String>(title.value);
+    }
+    if (difficulty.present) {
+      map['difficulty'] = Variable<int>(difficulty.value);
     }
     if (questionCount.present) {
       map['question_count'] = Variable<int>(questionCount.value);
@@ -1083,7 +1189,9 @@ class TopicsCompanion extends UpdateCompanion<Topic> {
     return (StringBuffer('TopicsCompanion(')
           ..write('id: $id, ')
           ..write('subjectId: $subjectId, ')
+          ..write('parentTopicId: $parentTopicId, ')
           ..write('title: $title, ')
+          ..write('difficulty: $difficulty, ')
           ..write('questionCount: $questionCount, ')
           ..write('intervalIndex: $intervalIndex, ')
           ..write('lastReviewedAt: $lastReviewedAt, ')
@@ -1719,7 +1827,9 @@ typedef $$TopicsTableCreateCompanionBuilder =
     TopicsCompanion Function({
       required String id,
       required String subjectId,
+      Value<String?> parentTopicId,
       required String title,
+      Value<int> difficulty,
       Value<int> questionCount,
       Value<int> intervalIndex,
       Value<int?> lastReviewedAt,
@@ -1732,7 +1842,9 @@ typedef $$TopicsTableUpdateCompanionBuilder =
     TopicsCompanion Function({
       Value<String> id,
       Value<String> subjectId,
+      Value<String?> parentTopicId,
       Value<String> title,
+      Value<int> difficulty,
       Value<int> questionCount,
       Value<int> intervalIndex,
       Value<int?> lastReviewedAt,
@@ -1778,8 +1890,18 @@ class $$TopicsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get parentTopicId => $composableBuilder(
+    column: $table.parentTopicId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get title => $composableBuilder(
     column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get difficulty => $composableBuilder(
+    column: $table.difficulty,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1851,8 +1973,18 @@ class $$TopicsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get parentTopicId => $composableBuilder(
+    column: $table.parentTopicId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get title => $composableBuilder(
     column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get difficulty => $composableBuilder(
+    column: $table.difficulty,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -1922,8 +2054,18 @@ class $$TopicsTableAnnotationComposer
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
+  GeneratedColumn<String> get parentTopicId => $composableBuilder(
+    column: $table.parentTopicId,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get title =>
       $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<int> get difficulty => $composableBuilder(
+    column: $table.difficulty,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get questionCount => $composableBuilder(
     column: $table.questionCount,
@@ -2005,7 +2147,9 @@ class $$TopicsTableTableManager
               ({
                 Value<String> id = const Value.absent(),
                 Value<String> subjectId = const Value.absent(),
+                Value<String?> parentTopicId = const Value.absent(),
                 Value<String> title = const Value.absent(),
+                Value<int> difficulty = const Value.absent(),
                 Value<int> questionCount = const Value.absent(),
                 Value<int> intervalIndex = const Value.absent(),
                 Value<int?> lastReviewedAt = const Value.absent(),
@@ -2016,7 +2160,9 @@ class $$TopicsTableTableManager
               }) => TopicsCompanion(
                 id: id,
                 subjectId: subjectId,
+                parentTopicId: parentTopicId,
                 title: title,
+                difficulty: difficulty,
                 questionCount: questionCount,
                 intervalIndex: intervalIndex,
                 lastReviewedAt: lastReviewedAt,
@@ -2029,7 +2175,9 @@ class $$TopicsTableTableManager
               ({
                 required String id,
                 required String subjectId,
+                Value<String?> parentTopicId = const Value.absent(),
                 required String title,
+                Value<int> difficulty = const Value.absent(),
                 Value<int> questionCount = const Value.absent(),
                 Value<int> intervalIndex = const Value.absent(),
                 Value<int?> lastReviewedAt = const Value.absent(),
@@ -2040,7 +2188,9 @@ class $$TopicsTableTableManager
               }) => TopicsCompanion.insert(
                 id: id,
                 subjectId: subjectId,
+                parentTopicId: parentTopicId,
                 title: title,
+                difficulty: difficulty,
                 questionCount: questionCount,
                 intervalIndex: intervalIndex,
                 lastReviewedAt: lastReviewedAt,
