@@ -1018,7 +1018,11 @@ class SubtopicsPanel extends StatelessWidget {
                   dense: true,
                   visualDensity: const VisualDensity(vertical: -2),
                   leading: const Icon(Icons.subdirectory_arrow_right, size: 18),
-                  title: Text(items[i].title),
+                  title: Text(
+                    items[i].questionCount > 0
+                        ? '${items[i].title} (${items[i].questionCount})'
+                        : items[i].title,
+                  ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -1041,6 +1045,32 @@ class SubtopicsPanel extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class QuestionCountPill extends StatelessWidget {
+  final int count;
+
+  const QuestionCountPill({super.key, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: Theme.of(context).colorScheme.surface,
+        border: Border.all(color: Colors.black.withValues(alpha: 0.10)),
+      ),
+      child: Text(
+        'KPSS: ~$count',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontSize: 10,
+          color: Colors.black.withValues(alpha: 0.70),
+          height: 1.0,
+        ),
+      ),
     );
   }
 }

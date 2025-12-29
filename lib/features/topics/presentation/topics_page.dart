@@ -118,7 +118,7 @@ class TopicsPage extends ConsumerWidget {
 
         return StatefulBuilder(
           builder: (ctx, setState) {
-            final header = (parentTopicTitle == null || parentTopicTitle!.trim().isEmpty)
+            final header = (parentTopicTitle == null || parentTopicTitle.trim().isEmpty)
                 ? topic.title
                 : '${parentTopicTitle!} > ${topic.title}';
 
@@ -166,10 +166,13 @@ class TopicsPage extends ConsumerWidget {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
+
                         ChipInfo(label: 'Hafıza', value: '$memPercent ($state)'),
                         ChipInfo(label: 'Unutmaya', value: remaining),
                         ChipInfo(label: 'Seviye', value: level),
                         ChipInfo(label: 'Aralık', value: _nextIntervalLabel(topic.intervalIndex, difficulty)),
+                        if (topic.questionCount > 0)
+                          ChipInfo(label: 'KPSS', value: '~${topic.questionCount} soru'),
                       ],
                     ),
 
@@ -549,7 +552,11 @@ class TopicsPage extends ConsumerWidget {
                             ),
                             title: Row(
                               children: [
-                                Expanded(child: Text('${t.title} (${t.questionCount})')),
+                                Expanded(child: Text(t.title)),
+                                if (t.questionCount > 0) ...[
+                                  const SizedBox(width: 8),
+                                  QuestionCountPill(count: t.questionCount),
+                                ],
                                 const SizedBox(width: 8),
                               ],
                             ),
