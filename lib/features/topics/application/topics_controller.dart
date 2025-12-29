@@ -9,6 +9,8 @@ import 'package:kpss_tekrar_takibi/features/topics/domain/review_intervals.dart'
 
 /// UI widgets extracted from TopicsPage to keep the page file small.
 
+
+
 class ChipInfo extends StatelessWidget {
   final String label;
   final String value;
@@ -21,6 +23,8 @@ class ChipInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -76,6 +80,8 @@ class CountdownBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (nextReviewAt == null) {
       return Container(
         width: 28,
@@ -118,8 +124,8 @@ class CountdownBadge extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
-                  color: Theme.of(context).colorScheme.surface,
-                  border: Border.all(color: Colors.black.withValues(alpha: 0.10)),
+                  color: cs.surfaceContainerHighest,
+                  border: Border.all(color: cs.outlineVariant.withValues(alpha: isDark ? 0.60 : 0.45)),
                 ),
                 child: Text(
                   '!',
@@ -172,6 +178,8 @@ class CountdownWithRemaining extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final text = _remainingText();
 
     return Column(
@@ -199,6 +207,30 @@ class CountdownWithRemaining extends StatelessWidget {
 }
 
 class MemoryUtils {
+
+  static Color _tintedSurface(BuildContext context, Color accent) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Dark'ta daha yüksek alpha -> renk canlı kalır
+    final alpha = isDark ? 0.26 : 0.12;
+
+    // Accent’i surface üzerine karıştır
+    return Color.alphaBlend(accent.withValues(alpha: alpha), cs.surface);
+  }
+
+  static Color? cardTint(
+      BuildContext context,
+      DateTime now,
+      int? lastReviewedAt,
+      int? nextReviewAt,
+      ) {
+    if (nextReviewAt == null) return null; // başlamadıysa default card rengi
+
+    final s = strength(now, lastReviewedAt, nextReviewAt);
+    final accent = baseColorForStrength(s);
+    return _tintedSurface(context, accent);
+  }
   /// 1.0 = full (taze), 0.0 = empty (unutma noktası)
   static double strength(DateTime now, int? lastReviewedAt, int? nextReviewAt) {
     if (lastReviewedAt == null || nextReviewAt == null) return 0;
@@ -246,7 +278,8 @@ class MemoryUtils {
       int? nextReviewAt,
       ) {
     if (nextReviewAt == null) {
-      return Colors.black.withValues(alpha: 0.28);
+      final cs = Theme.of(context).colorScheme;
+      return cs.onSurfaceVariant.withValues(alpha: 0.45);
     }
     final next = DateTime.fromMillisecondsSinceEpoch(nextReviewAt);
     if (next.isBefore(now)) {
@@ -294,34 +327,6 @@ class MemoryUtils {
     return '<1 dk';
   }
 
-  static Color? cardTint(
-      BuildContext context,
-      DateTime now,
-      int? lastReviewedAt,
-      int? nextReviewAt,
-      ) {
-    if (lastReviewedAt == null || nextReviewAt == null) return null;
-
-    final surface = Theme.of(context).colorScheme.surface;
-    final next = DateTime.fromMillisecondsSinceEpoch(nextReviewAt);
-    if (next.isBefore(now)) {
-      final base = const Color(0xFFE53935); // kırmızı
-      return Color.lerp(base, surface, 0.88); // pastel
-    }
-
-    final s = strength(now, lastReviewedAt, nextReviewAt); // 1 taze -> 0 unutma
-
-    // Aynı segment renkleri (MemoryDecayBar ile birebir)
-    final Color base = switch (s) {
-      >= 0.75 => const Color(0xFF43A047), // green
-      >= 0.35 => const Color(0xFFFDD835), // yellow
-      >= 0.15 => const Color(0xFFFB8C00), // orange
-      _ => const Color(0xFFE53935),       // red
-    };
-
-    // Soft/pastel görünüm: rengi surface ile karıştır
-    return Color.lerp(base, surface, 0.88);
-  }
 }
 
 class MemoryHeader extends StatelessWidget {
@@ -340,6 +345,8 @@ class MemoryHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = MemoryUtils.stateLabel(now, lastReviewedAt, nextReviewAt);
     final color = MemoryUtils.stateColor(context, now, lastReviewedAt, nextReviewAt);
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Row(
       children: [
@@ -347,7 +354,7 @@ class MemoryHeader extends StatelessWidget {
           'Hafıza',
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
             fontSize: 12,
-            color: Colors.black.withValues(alpha: 0.70),
+            color: cs.onSurface.withValues(alpha: isDark ? 0.92 : 0.75),
           ),
         ),
         const Spacer(),
@@ -368,6 +375,8 @@ class _MemoryStatePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -391,7 +400,7 @@ class _MemoryStatePill extends StatelessWidget {
             text,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               fontSize: 10,
-              color: Colors.black.withValues(alpha: 0.70),
+              color: cs.onSurfaceVariant.withValues(alpha: isDark ? 0.90 : 0.70),
               height: 1.0,
             ),
           ),
@@ -406,6 +415,8 @@ class MemoryLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     Widget item(Color c, String t) {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -420,7 +431,9 @@ class MemoryLegend extends StatelessWidget {
             t,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               fontSize: 9,
-              color: Colors.black.withValues(alpha: 0.55),
+              color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(
+                alpha: Theme.of(context).brightness == Brightness.dark ? 0.80 : 0.55,
+              ),
               height: 1.0,
             ),
           ),
@@ -455,6 +468,8 @@ class IntervalHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final days = ReviewIntervals.daysForDifficulty(difficulty);
     final total = days.isEmpty ? 0 : days.length;
     final idx = ReviewIntervals.clampIndex(intervalIndex, length: total);
@@ -471,15 +486,14 @@ class IntervalHeader extends StatelessWidget {
           'Tekrar planı',
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
             fontSize: 12,
-            color: Colors.black.withValues(alpha: 0.70),
-          ),
+            color: cs.onSurfaceVariant.withValues(alpha: isDark ? 0.90 : 0.70),          ),
 
         ),
         const SizedBox(width: 8),
         Text(
           '•',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.black.withValues(alpha: 0.45),
+            color: cs.onSurfaceVariant.withValues(alpha: isDark ? 0.75 : 0.45),
           ),
         ),
         const SizedBox(width: 8),
@@ -502,6 +516,8 @@ class _IntervalInfoPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -525,7 +541,7 @@ class _IntervalInfoPill extends StatelessWidget {
             text,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               fontSize: 10,
-              color: Colors.black.withValues(alpha: 0.70),
+              color: cs.onSurfaceVariant.withValues(alpha: isDark ? 0.90 : 0.70),
               height: 1.0,
             ),
           ),
@@ -549,6 +565,8 @@ class MemoryDecayBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final started = lastReviewedAt != null && nextReviewAt != null;
     if (!started) {
       // başlamadıysa soluk gri bar
@@ -679,7 +697,9 @@ class MemoryDecayBar extends StatelessWidget {
                     '%$p',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       fontSize: 10,
-                      color: Colors.black.withValues(alpha: 0.55),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(
+                        alpha: Theme.of(context).brightness == Brightness.dark ? 0.80 : 0.55,
+                      ),
                     ),
                   ),
                 ),
@@ -708,6 +728,8 @@ class IntervalStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final days = ReviewIntervals.daysForDifficulty(difficulty);
     final idx = ReviewIntervals.clampIndex(intervalIndex, length: days.length);
 
@@ -959,6 +981,8 @@ class DifficultyPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final base = _baseColor();
     final surface = Theme.of(context).colorScheme.surface;
     final bg = Color.lerp(base, surface, 0.86)!; // pastel
@@ -1006,6 +1030,8 @@ class IntervalNode extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     const dotSize = 10.0;
 
     final labelColor =
@@ -1093,6 +1119,8 @@ class SubtopicsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return asyncValue.when(
       loading: () => const Padding(
         padding: EdgeInsets.all(12),
@@ -1160,6 +1188,8 @@ class QuestionCountPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -1171,7 +1201,7 @@ class QuestionCountPill extends StatelessWidget {
         'KPSS: ~$count',
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
           fontSize: 10,
-          color: Colors.black.withValues(alpha: 0.70),
+          color: cs.onSurfaceVariant.withValues(alpha: isDark ? 0.90 : 0.70),
           height: 1.0,
         ),
       ),

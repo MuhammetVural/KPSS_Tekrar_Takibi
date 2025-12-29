@@ -652,6 +652,7 @@ class TopicsPage extends ConsumerWidget {
                   return Card(
                     key: ValueKey(t.id),
                     color: tint,
+                    surfaceTintColor: Colors.transparent,
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Column(
