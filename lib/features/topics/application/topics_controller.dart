@@ -473,7 +473,17 @@ class IntervalHeader extends StatelessWidget {
             fontSize: 12,
             color: Colors.black.withValues(alpha: 0.70),
           ),
+
         ),
+        const SizedBox(width: 8),
+        Text(
+          '•',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.black.withValues(alpha: 0.45),
+          ),
+        ),
+        const SizedBox(width: 8),
+        DifficultyPill(difficulty: difficulty),
         const Spacer(),
         _IntervalInfoPill(text: label, dotColor: dotColor),
       ],
@@ -919,6 +929,59 @@ class IntervalStrip extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class DifficultyPill extends StatelessWidget {
+  final int difficulty;
+
+  const DifficultyPill({
+    super.key,
+    required this.difficulty,
+  });
+
+  String _labelTr() {
+    return switch (difficulty) {
+      0 => 'Kolay',
+      2 => 'Zor',
+      _ => 'Orta',
+    };
+  }
+
+  Color _baseColor() {
+    return switch (difficulty) {
+      0 => const Color(0xFF459F47), // green
+      2 => const Color(0xFF9C2B25), // red
+      _ => const Color(0xFFA18A21), // yellow
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final base = _baseColor();
+    final surface = Theme.of(context).colorScheme.surface;
+    final bg = Color.lerp(base, surface, 0.86)!; // pastel
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: base.withValues(alpha: 0.30),
+          width: 1,
+        ),
+      ),
+      child: Text(
+        _labelTr(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontSize: 10,
+          height: 1.0,
+          fontWeight: FontWeight.w600,
+          color: base,
+        ),
+      ),
     );
   }
 }

@@ -34,6 +34,7 @@ class App extends ConsumerWidget {
     final locale = ref.watch(localeProvider);
 
     return MaterialApp.router(
+      debugShowCheckedModeBanner: false,
       title: 'KPSS Tekrar Takibi',
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
