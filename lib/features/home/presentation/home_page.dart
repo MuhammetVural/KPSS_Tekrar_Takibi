@@ -1,10 +1,13 @@
 import 'package:auto_route/annotations.dart';
+import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kpss_tekrar_takibi/core/theme/app_theme.dart';
 import 'package:kpss_tekrar_takibi/features/home/application/selected_subject_provider.dart';
 import 'package:kpss_tekrar_takibi/features/topics/application/topics_controller.dart';
 import 'package:kpss_tekrar_takibi/l10n/app_localizations.dart';
+
+import '../../../app/router/app_router.dart';
 
 @RoutePage()
 class HomePage extends ConsumerWidget {
@@ -166,6 +169,7 @@ class _HomeTopicList extends StatelessWidget {
       itemBuilder: (ctx, i) {
         final x = items[i];
         return ListTile(
+
           contentPadding: EdgeInsets.zero,
           title: Text(x.topic.title),
           subtitle: Text(x.subjectName),
@@ -175,6 +179,17 @@ class _HomeTopicList extends StatelessWidget {
             lastReviewedAt: x.topic.lastReviewedAt,
             nextReviewAt: x.topic.nextReviewAt,
           ),
+          onTap: () {
+            final t = x.topic;
+            context.router.push(
+              TopicsRoute(
+                subjectId: t.subjectId,
+                subjectName: x.subjectName,
+                parentTopicId: t.parentTopicId,
+                focusTopicId: t.id,
+              ),
+            );
+          },
         );
       },
     );

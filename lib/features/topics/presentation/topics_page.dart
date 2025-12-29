@@ -8,6 +8,29 @@ import 'package:kpss_tekrar_takibi/features/topics/application/topics_controller
 import 'package:kpss_tekrar_takibi/app/router/app_router.dart';
 import 'package:kpss_tekrar_takibi/core/db/app_database.dart';
 import 'package:kpss_tekrar_takibi/features/topics/domain/review_intervals.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+
+
+final _topicsItemScrollControllerProvider =
+Provider.autoDispose<ItemScrollController>((ref) => ItemScrollController());
+
+final _topicsItemPositionsListenerProvider =
+Provider.autoDispose<ItemPositionsListener>((ref) => ItemPositionsListener.create());
+
+// Auto-focus / highlight state should be per-page instance.
+// autoDispose => sayfadan çıkınca sıfırlanır, tekrar girince yine focus yapar.
+final _topicsDidAutoFocusProvider =
+StateProvider.autoDispose<bool>((ref) => false);
+
+final _topicsAutoFocusIdProvider =
+StateProvider.autoDispose<String?>((ref) => null);
+
+final _topicsIsAutoFocusingProvider =
+StateProvider.autoDispose<bool>((ref) => false);
+
+final _topicsHighlightIdProvider =
+StateProvider.autoDispose<String?>((ref) => null);
+
 
 /// subjectId + parentTopicId kombinasyonu ile (ana/alt) listeleri çekmek için.
 class TopicsArgs {
@@ -104,12 +127,16 @@ class TopicsPage extends ConsumerWidget {
   /// Alt konular sayfası AppBar başlığı için
   final String? parentTitle;
 
+  /// Dashboard/Home'dan gelince otomatik scroll + highlight hedefi
+  final String? focusTopicId;
+
   const TopicsPage({
     super.key,
     required this.subjectId,
     required this.subjectName,
     this.parentTopicId,
     this.parentTitle,
+    this.focusTopicId,
   });
 
 
@@ -495,6 +522,75 @@ class TopicsPage extends ConsumerWidget {
       orElse: () => DateTime.now(),
     );
 
+    final listArgs = TopicsArgs(subjectId: subjectId, parentTopicId: parentTopicId);
+
+    final itemScrollController = ref.watch(_topicsItemScrollControllerProvider);
+    final itemPositionsListener = ref.watch(_topicsItemPositionsListenerProvider);
+    final highlightId = ref.watch(_topicsHighlightIdProvider);
+
+    ref.listen<AsyncValue<List<Topic>>>(
+
+        topicsProvider(listArgs),
+            (prev, next) {
+      final id = focusTopicId;
+      if (id == null) return;
+
+      // Başarıyla odaklandıysa tekrar yapma
+      if (ref.read(_topicsDidAutoFocusProvider)) return;
+
+      // Aynı anda birden fazla denemeyi engelle
+      if (ref.read(_topicsIsAutoFocusingProvider)) return;
+
+      // Aynı id için tekrar denemeyi engelle (başarısızsa aşağıda null’a çekiyoruz)
+      if (ref.read(_topicsAutoFocusIdProvider) == id) return;
+
+      final items = next.asData?.value;
+      if (items == null || items.isEmpty) return;
+
+      final idx = items.indexWhere((t) => t.id == id);
+      if (idx < 0) return;
+
+      // lock
+      ref.read(_topicsIsAutoFocusingProvider.notifier).state = true;
+      ref.read(_topicsAutoFocusIdProvider.notifier).state = id;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        // Liste attach olmadıysa ileride tekrar denensin
+        if (!itemScrollController.isAttached) {
+          ref.read(_topicsIsAutoFocusingProvider.notifier).state = false;
+          ref.read(_topicsAutoFocusIdProvider.notifier).state = null;
+          return;
+        }
+
+        try {
+          await itemScrollController.scrollTo(
+            index: idx,
+            duration: const Duration(milliseconds: 420),
+            curve: Curves.easeOutCubic,
+            alignment: 0.12,
+          );
+
+          // success => bu sayfa instance'ında bir daha çalışmasın
+          ref.read(_topicsDidAutoFocusProvider.notifier).state = true;
+
+          // highlight
+          ref.read(_topicsHighlightIdProvider.notifier).state = id;
+          Future.delayed(const Duration(milliseconds: 1500), () {
+            if (!context.mounted) return;
+            ref.read(_topicsHighlightIdProvider.notifier).state = null;
+          });
+        } finally {
+          if (context.mounted) {
+            ref.read(_topicsIsAutoFocusingProvider.notifier).state = false;
+          }
+        }
+      });
+    },
+    );
+
+
+
+
     // Sadece ana konular sayfasında count + expand state mantıklı
     final countsAsync = parentTopicId == null
         ? ref.watch(subtopicCountsProvider(subjectId))
@@ -528,7 +624,9 @@ class TopicsPage extends ConsumerWidget {
             data: (counts) {
               final expanded = ref.watch(expandedParentsProvider);
 
-              return ListView.separated(
+              return ScrollablePositionedList.separated(
+                itemScrollController: itemScrollController,
+                itemPositionsListener: itemPositionsListener,
                 padding: const EdgeInsets.all(16),
                 itemCount: topics.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -536,6 +634,10 @@ class TopicsPage extends ConsumerWidget {
                   final t = topics[i];
                   final tint = MemoryUtils.cardTint(context, now, t.lastReviewedAt, t.nextReviewAt);
                   final remaining = MemoryUtils.remainingShort(now, t.nextReviewAt);
+
+                  final isHighlighted = highlightId == t.id;
+                  final baseColor = tint ?? Theme.of(context).colorScheme.surface;
+                  final highlightColor = Theme.of(context).colorScheme.primaryContainer;
 
                   final subCount = counts[t.id] ?? 0;
                   final hasSubtopics = parentTopicId == null && subCount > 0;
@@ -546,7 +648,9 @@ class TopicsPage extends ConsumerWidget {
                       ? ref.watch(topicsProvider(childrenArgs))
                       : null;
 
+
                   return Card(
+                    key: ValueKey(t.id),
                     color: tint,
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 12),

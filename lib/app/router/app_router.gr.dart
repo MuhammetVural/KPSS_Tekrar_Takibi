@@ -98,6 +98,7 @@ class TopicsRoute extends PageRouteInfo<TopicsRouteArgs> {
     required String subjectName,
     String? parentTopicId,
     String? parentTitle,
+    String? focusTopicId,
     List<PageRouteInfo>? children,
   }) : super(
          TopicsRoute.name,
@@ -107,6 +108,7 @@ class TopicsRoute extends PageRouteInfo<TopicsRouteArgs> {
            subjectName: subjectName,
            parentTopicId: parentTopicId,
            parentTitle: parentTitle,
+           focusTopicId: focusTopicId,
          ),
          initialChildren: children,
        );
@@ -123,6 +125,7 @@ class TopicsRoute extends PageRouteInfo<TopicsRouteArgs> {
         subjectName: args.subjectName,
         parentTopicId: args.parentTopicId,
         parentTitle: args.parentTitle,
+        focusTopicId: args.focusTopicId,
       );
     },
   );
@@ -135,6 +138,7 @@ class TopicsRouteArgs {
     required this.subjectName,
     this.parentTopicId,
     this.parentTitle,
+    this.focusTopicId,
   });
 
   final Key? key;
@@ -147,9 +151,11 @@ class TopicsRouteArgs {
 
   final String? parentTitle;
 
+  final String? focusTopicId;
+
   @override
   String toString() {
-    return 'TopicsRouteArgs{key: $key, subjectId: $subjectId, subjectName: $subjectName, parentTopicId: $parentTopicId, parentTitle: $parentTitle}';
+    return 'TopicsRouteArgs{key: $key, subjectId: $subjectId, subjectName: $subjectName, parentTopicId: $parentTopicId, parentTitle: $parentTitle, focusTopicId: $focusTopicId}';
   }
 
   @override
@@ -160,7 +166,8 @@ class TopicsRouteArgs {
         subjectId == other.subjectId &&
         subjectName == other.subjectName &&
         parentTopicId == other.parentTopicId &&
-        parentTitle == other.parentTitle;
+        parentTitle == other.parentTitle &&
+        focusTopicId == other.focusTopicId;
   }
 
   @override
@@ -169,5 +176,6 @@ class TopicsRouteArgs {
       subjectId.hashCode ^
       subjectName.hashCode ^
       parentTopicId.hashCode ^
-      parentTitle.hashCode;
+      parentTitle.hashCode ^
+      focusTopicId.hashCode;
 }
