@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kpss_tekrar_takibi/features/exams/presentation/exam_list_page.dart';
 
 import 'package:kpss_tekrar_takibi/features/subjects/presentation/subjects_page.dart';
-
+import 'package:kpss_tekrar_takibi/features/home/presentation/home_page.dart';
 import '../../features/topics/presentation/topics_page.dart';
 
 
@@ -16,7 +16,8 @@ final appRouterProvider = Provider<AppRouter>((ref) => AppRouter());
 class AppRouter extends RootStackRouter {
   @override
   List<AutoRoute> get routes => [
-    AutoRoute(page: ExamListRoute.page, initial: true),
+    AutoRoute(page: HomeRoute.page, ),
+    AutoRoute(page: ExamListRoute.page,initial: true ),
     AutoRoute(page: SubjectsRoute.page),
     AutoRoute(page: TopicsRoute.page),
   ];

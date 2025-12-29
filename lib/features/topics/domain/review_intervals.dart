@@ -10,7 +10,7 @@ class ReviewIntervals {
 
   // Difficulty istersen burada farklılaştır (şimdilik medium ile aynı bırakabilirsin)
   static const List<int> easy = [0, 1, 4, 9, 21, 30];
-  static const List<int> hard = [0, 1, 2, 4, 7, 30];
+  static const List<int> hard = [0, 1, 2, 4, 7, 14, 21, 30];
 
   static List<int> daysForDifficulty(int difficulty) {
     switch (difficulty) {

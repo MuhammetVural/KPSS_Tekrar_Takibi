@@ -44,8 +44,21 @@ final topicsProvider = FutureProvider.family<List<Topic>, TopicsArgs>((ref, args
       return base & t.parentTopicId.equals(args.parentTopicId!);
     })
     ..orderBy([
-          (t) => drift.OrderingTerm.desc(t.questionCount),
-          (t) => drift.OrderingTerm.asc(t.title),
+      // 1) Başlatılanlar en üstte
+          (tbl) => drift.OrderingTerm(
+        expression: tbl.lastReviewedAt.isNotNull() | tbl.nextReviewAt.isNotNull(),
+        mode: drift.OrderingMode.desc,
+      ),
+
+      // 2) Zamanı en az kalan en üstte
+          (tbl) => drift.OrderingTerm(
+        expression: tbl.nextReviewAt,
+        mode: drift.OrderingMode.asc,
+        nulls: drift.NullsOrder.last,
+      ),
+
+      // 3) Stabil sıralama
+          (tbl) => drift.OrderingTerm(expression: tbl.title),
     ]);
 
   return q.get();

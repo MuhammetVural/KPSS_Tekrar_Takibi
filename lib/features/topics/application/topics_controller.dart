@@ -756,15 +756,19 @@ class IntervalStrip extends StatelessWidget {
 
         final knobX = (activeIdx < 0) ? null : xs[activeIdx].clamp(0.0, w);
 
+        // IntervalStrip build -> LayoutBuilder içi
+
         const trackH = 2.0;
         const tickH = 10.0;
         const knobSize = 16.0;
+        const labelW = 34.0;
 
-        final trackTop = 8.0;
+        final trackTop = 22.0;
+        final dayLabelTop = (trackTop - 18.0).clamp(0.0, trackTop);
 
         Widget buildTrack() {
           return SizedBox(
-            height: 26,
+            height: 34, // <-- 26 yerine 34 yap
             child: Stack(
               children: [
                 // base track
@@ -799,7 +803,7 @@ class IntervalStrip extends StatelessWidget {
                 // ticks
                 for (int i = 0; i < xs.length; i++)
                   Positioned(
-                    left: xs[i] - 0.5,
+                    left: (xs[i] - 0.5).clamp(0.0, w - 1),
                     top: trackTop - ((tickH - trackH) / 2),
                     child: Container(
                       width: 1,
@@ -807,6 +811,42 @@ class IntervalStrip extends StatelessWidget {
                       color: (activeIdx >= 0 && i <= activeIdx) ? activeColor : tickInactive,
                     ),
                   ),
+
+                // ✅ day labels: çizginin ÜSTÜ
+                if (started)
+                  ...List.generate(xs.length, (i) {
+                    final isFirst = i == 0;
+                    final isLast = i == xs.length - 1;
+
+                    final left = isFirst
+                        ? 0.0
+                        : isLast
+                        ? (w - labelW)
+                        : (xs[i] - (labelW / 2)).clamp(0.0, w - labelW);
+
+                    final align = isFirst
+                        ? TextAlign.left
+                        : isLast
+                        ? TextAlign.right
+                        : TextAlign.center;
+
+                    return Positioned(
+                      left: left,
+                      top: dayLabelTop,
+                      width: labelW,
+                      child: Text(
+                        '${days[i]}.g',
+                        textAlign: align,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          fontSize: 10,
+                          height: 1.0,
+                          color: (activeIdx >= 0 && i <= activeIdx)
+                              ? activeColor
+                              : Colors.black.withValues(alpha: 0.45),
+                        ),
+                      ),
+                    );
+                  }),
 
                 // knob
                 if (knobX != null)
@@ -838,16 +878,16 @@ class IntervalStrip extends StatelessWidget {
         Widget buildLabels() {
           if (!started) return const SizedBox.shrink();
 
-          const labelW = 56.0;
-
           return SizedBox(
             height: 20,
             child: Stack(
               children: [
+                // ❌ BURADAKİ '${days[i]}.g' loop’unu SİL (artık üstte çiziyoruz)
+
+                // segment labels (X Gün) - altta kalsın
                 for (int i = 0; i < gaps.length; i++)
                   Positioned(
-                    left: (((xs[i] + xs[i + 1]) / 2) - (labelW / 2))
-                        .clamp(0.0, w - labelW),
+                    left: (((xs[i] + xs[i + 1]) / 2) - (labelW / 2)).clamp(0.0, w - labelW),
                     top: 0,
                     width: labelW,
                     child: Text(
@@ -857,7 +897,6 @@ class IntervalStrip extends StatelessWidget {
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         fontSize: 10,
                         height: 1.0,
-                        // segment tamamlandıysa renklendir: i < activeIdx
                         color: (activeIdx >= 0 && i < activeIdx)
                             ? activeColor
                             : Colors.black.withValues(alpha: 0.45),
@@ -868,6 +907,8 @@ class IntervalStrip extends StatelessWidget {
             ),
           );
         }
+
+
 
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -931,7 +972,7 @@ class IntervalNode extends StatelessWidget {
 
     // Başladıysa: seviye + (gün)
     return SizedBox(
-      width: 34,
+      width: 50,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
