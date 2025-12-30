@@ -1,4 +1,4 @@
-package com.muhammetvural.kpss_tekrar_takibi
+package com.muhammetvural.kpsstekrartakibi
 
 import io.flutter.embedding.android.FlutterActivity
 
