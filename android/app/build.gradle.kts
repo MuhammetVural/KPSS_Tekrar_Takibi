@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,10 +8,37 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Load keystore properties for RELEASE signing
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+} else {
+    throw GradleException(
+        "key.properties not found at: ${keystorePropertiesFile.absolutePath}. " +
+                "Create android/key.properties for release signing."
+    )
+}
+
 android {
-    namespace = "com.muhammetvural.kpss_tekrar_takibi"
+    namespace = "com.muhammetvural.kpsstekrartakibi"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
+
+    signingConfigs {
+        create("release") {
+            val storeFilePath = keystoreProperties["storeFile"]?.toString()
+                ?: throw GradleException("Missing 'storeFile' in key.properties")
+
+            storeFile = file(storeFilePath)
+            storePassword = keystoreProperties["storePassword"]?.toString()
+                ?: throw GradleException("Missing 'storePassword' in key.properties")
+            keyAlias = keystoreProperties["keyAlias"]?.toString()
+                ?: throw GradleException("Missing 'keyAlias' in key.properties")
+            keyPassword = keystoreProperties["keyPassword"]?.toString()
+                ?: throw GradleException("Missing 'keyPassword' in key.properties")
+        }
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -20,10 +50,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.muhammetvural.kpss_tekrar_takibi"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = "com.muhammetvural.kpsstekrartakibi"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -32,9 +59,8 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // IMPORTANT: Release must be signed with RELEASE keystore (not debug)
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

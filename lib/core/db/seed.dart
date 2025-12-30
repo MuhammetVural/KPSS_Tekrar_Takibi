@@ -1,5 +1,145 @@
 import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' as drift;
 import 'package:kpss_tekrar_takibi/core/db/app_database.dart';
+
+
+// KPSS konu başına yaklaşık soru sayısı (tek sayı – yön bulmak için)
+// Not: Buradaki başlıklar DB’ye insert ettiğin Topic.title ile birebir aynı olmalı.
+// KPSS konu başına yaklaşık soru sayısı (tek sayı – yön bulmak için)
+// Not: Anahtarlar DB'deki `Subjects.id` ve `Topics.title` ile eşleşmeli.
+// Bazı başlıklar için alternatif yazımları da ekledik.
+const _kpssCountsBySubjectId = <String, Map<String, int>>{
+  // Türkçe (30)
+  'kpss_tr': {
+    'Sözcükte Anlam': 1,
+    'Sözcüğün, Söz gruplarının Anlamı': 1,
+
+    'Cümlede Anlam': 3,
+    'Cümlenin Anlamı, Yorumu': 3,
+
+    'Sözcük Türleri': 2,
+
+    'Sözcüğün Yapısı, Ekler': 1,
+    'Sözcüğün Yapısı – Ekler': 1,
+
+    'Cümlenin Ögeleri': 1,
+    'Ses Olayları': 1,
+    'Yazım Kuralları': 1,
+
+    'Paragraf': 14,
+    'Paragrafta Anlatım Yolları, Biçimleri': 2,
+
+    'Sözel Muhakeme ve Mantık': 4,
+  },
+
+  // Matematik (26) + Geometri (3)
+  'kpss_mat': {
+    'Temel Kavramlar – Çözümleme': 3,
+    'Rasyonel Sayılar – Ondalık Sayılar': 2,
+    'Basit Eşitsizlikler': 1,
+    'Mutlak Değer': 1,
+    'Üslü Sayılar': 2,
+    'Köklü Sayılar': 1,
+    'Çarpanlara Ayırma': 1,
+    'Denklem Çözme': 1,
+    'Sayı Problemleri': 1,
+    'Yaş Problemleri': 1,
+    'Hareket Problemleri': 1,
+    'Yüzde Kar-Zarar, Faiz Problemleri': 2,
+    'Bağıntı ve Fonksiyon': 1,
+    'İşlem': 1,
+    'Olasılık': 1,
+    'Sayısal Mantık': 6,
+
+    // Geometri
+    'Özel Üçgenler': 1,
+    'Dörtgenler – Çokgenler': 1,
+    'Analitik Geometri': 1,
+  },
+
+  // Tarih (26)
+  'kpss_tarih': {
+    'İslamiyet’ten Önceki Türk Devletleri': 1,
+    'İlk Müslüman Türk Devletleri': 2,
+    'Osmanlı Devleti Siyasi': 6,
+    'Osmanlı Devleti Kültür ve Uygarlık': 3,
+    'Kurtuluş Savaşı Hazırlık Dönemi': 4,
+    'Kurtuluş Savaşı Cepheleri': 3,
+    'Devrim Tarihi': 2,
+    'Atatürk Dönemi İç ve Dış Politika': 2,
+    'Atatürk İlkeleri': 1,
+    'Çağdaş Türk ve Dünya Tarihi': 3,
+  },
+
+  // Coğrafya (21)
+  'kpss_cog': {
+    'Türkiye Coğrafi Konumu': 2,
+    'Türkiye’nin Yer şekilleri Su Örtüsü': 3,
+    'Türkiye’nin İklimi Ve Bitki Örtüsü': 3,
+    'Toprak Ve Doğa Çevre': 3,
+    'Türkiye’nin Beşeri Coğrafyası': 3,
+    'Tarım': 1,
+    'Madenler Ve Enerji Kaynakları': 3,
+    'Sanayi': 1,
+    'Ulaşım': 1,
+    'Turizm': 1,
+  },
+
+  // Vatandaşlık (15)
+  'kpss_vat': {
+    'Hukuka Giriş': 1,
+    'Genel Esaslar': 1,
+    'Yasama': 3,
+    'Yürütme': 3,
+    'İdari Yapı': 4,
+    'Güncel': 3,
+  },
+};
+
+// subjectId’lerin seed’de farklıysa diye küçük fallback
+const _kpssCountsFallbackByTitle = <String, int>{
+  'Paragraf': 14,
+  'Sayısal Mantık': 6,
+  'Sözel Muhakeme ve Mantık': 4,
+};
+
+int _kpssQuestionCount(String subjectId, String title) {
+  return _kpssCountsBySubjectId[subjectId]?[title] ??
+      _kpssCountsFallbackByTitle[title] ??
+      0;
+}
+
+/// Daha önce seed'lenmiş (questionCount=20) KPSS konularını gerçek KPSS dağılımına çevirir.
+/// - Kullanıcı sonradan değiştirmişse ezmemek için sadece `== 20` olanları güncelliyoruz.
+/// - Map'te karşılığı yoksa 0 yapıyoruz (UI'da sayı görünmesin).
+Future<void> _applyKpssQuestionCountsIfDefault20(AppDatabase db) async {
+  const kpssSubjectIds = <String>{
+    'kpss_tr',
+    'kpss_mat',
+    'kpss_tarih',
+    'kpss_cog',
+    'kpss_vat',
+    'kpss_guncel',
+  };
+
+  final rows = await (db.select(db.topics)
+    ..where((t) =>
+    t.subjectId.isIn(kpssSubjectIds.toList()) & t.questionCount.equals(20)))
+      .get();
+
+  if (rows.isEmpty) return;
+
+  await db.batch((b) {
+    for (final r in rows) {
+      final newCount = _kpssQuestionCount(r.subjectId, r.title);
+      b.update(
+        db.topics,
+        TopicsCompanion(questionCount: Value(newCount)),
+        where: (t) => t.id.equals(r.id),
+      );
+    }
+  });
+}
 
 Future<void> seedIfNeeded(AppDatabase db) async {
   // Seed exams if empty
@@ -86,7 +226,7 @@ Future<void> seedIfNeeded(AppDatabase db) async {
         TopicsCompanion(id: const Value('kpss_tr_cumlede_anlam_karsilastirma'), subjectId: const Value('kpss_tr'), parentTopicId: const Value('kpss_tr_cumlede_anlam'), title: const Value('Karşılaştırma'), questionCount: qc20, intervalIndex: const Value(0), lastReviewedAt: const Value(null), nextReviewAt: const Value(null), archived: const Value(false), createdAt: Value(now)),
         TopicsCompanion(id: const Value('kpss_tr_cumlede_anlam_cikarim'), subjectId: const Value('kpss_tr'), parentTopicId: const Value('kpss_tr_cumlede_anlam'), title: const Value('Çıkarım (Sonuç Çıkarma)'), questionCount: qc20, intervalIndex: const Value(0), lastReviewedAt: const Value(null), nextReviewAt: const Value(null), archived: const Value(false), createdAt: Value(now)),
         TopicsCompanion(id: const Value('kpss_tr_cumlede_anlam_oznel_nesnel'), subjectId: const Value('kpss_tr'), parentTopicId: const Value('kpss_tr_cumlede_anlam'), title: const Value('Öznel–Nesnel Yargı'), questionCount: qc20, intervalIndex: const Value(0), lastReviewedAt: const Value(null), nextReviewAt: const Value(null), archived: const Value(false), createdAt: Value(now)),
-        TopicsCompanion(id: const Value('kpss_tr_paragraf'), subjectId: const Value('kpss_tr'), title: const Value('Paragraf'), questionCount: const Value(30), intervalIndex: const Value(0), lastReviewedAt: const Value(null), nextReviewAt: const Value(null), archived: const Value(false), createdAt: Value(now)),
+        TopicsCompanion(id: const Value('kpss_tr_paragraf'), subjectId: const Value('kpss_tr'), title: const Value('Paragraf'), questionCount: qc20, intervalIndex: const Value(0), lastReviewedAt: const Value(null), nextReviewAt: const Value(null), archived: const Value(false), createdAt: Value(now)),
         // --- Paragraf alt başlıkları ---
         TopicsCompanion(id: const Value('kpss_tr_paragraf_konu_ana_dusunce'), subjectId: const Value('kpss_tr'), parentTopicId: const Value('kpss_tr_paragraf'), title: const Value('Konu–Ana Düşünce'), questionCount: qc20, intervalIndex: const Value(0), lastReviewedAt: const Value(null), nextReviewAt: const Value(null), archived: const Value(false), createdAt: Value(now)),
         TopicsCompanion(id: const Value('kpss_tr_paragraf_yardimci_dusunce'), subjectId: const Value('kpss_tr'), parentTopicId: const Value('kpss_tr_paragraf'), title: const Value('Yardımcı Düşünce'), questionCount: qc20, intervalIndex: const Value(0), lastReviewedAt: const Value(null), nextReviewAt: const Value(null), archived: const Value(false), createdAt: Value(now)),
@@ -239,4 +379,121 @@ Future<void> seedIfNeeded(AppDatabase db) async {
     });
   }
 
+  // Daha önce seed'lenmiş (questionCount=20) KPSS konularını gerçek KPSS dağılımına çevir.
+  await applyQuestionCounts(db);
+
+}
+
+Future<void> applyQuestionCounts(AppDatabase db) async {
+  // subjectId -> (topicTitle -> questionCount)
+  const counts = <String, Map<String, int>>{
+    // KPSS - Türkçe
+    'kpss_tr': {
+      'Paragraf': 14,
+      'Sözel Muhakeme ve Mantık': 4,
+      'Cümlenin Anlamı, Yorumu': 3,
+      'Sözcük Türleri': 2,
+      'Paragrafta Anlatım Yolları, Biçimleri': 2,
+      'Ses Olayları': 1,
+      'Yazım Kuralları': 1,
+      'Cümlenin Ögeleri': 1,
+      'Sözcüğün Yapısı, Ekler': 1,
+      'Sözcüğün, Söz gruplarının Anlamı': 1,
+    },
+
+    // KPSS - Matematik (başlıklar seed'deki title ile birebir aynı olmalı)
+    'kpss_mat': {
+      'Temel Kavramlar': 2,
+      'Sayı Basamakları': 1,
+      'Bölme ve Bölünebilme': 1,
+      'OBEB - OKEK': 1,
+      'Rasyonel Sayılar': 1,
+      'Basit Eşitsizlikler': 1,
+      'Mutlak Değer': 1,
+      'Üslü Sayılar': 1,
+      'Köklü Sayılar': 1,
+      'Çarpanlara Ayırma': 1,
+      'Oran - Orantı': 1,
+      'Denklem Çözme': 1,
+      'Problemler': 12,
+      'Kümeler': 1,
+      'Fonksiyonlar': 1,
+      'Permütasyon - Kombinasyon - Olasılık': 1,
+      'Tablo ve Grafik': 2,
+    },
+
+    // KPSS - Tarih
+    'kpss_tarih': {
+      'Tarih Bilimine Giriş': 1,
+      'İlk Çağ Uygarlıkları': 1,
+      'İslamiyet Öncesi Türk Tarihi': 1,
+      'İslam Tarihi': 1,
+      'Türk-İslam Devletleri': 2,
+      'Osmanlı Kuruluş ve Yükselme': 4,
+      'Osmanlı Kültür ve Medeniyet': 3,
+      'Osmanlı Duraklama - Gerileme - Dağılma': 5,
+      'Kurtuluş Savaşı': 4,
+      'Atatürk Dönemi İç Politika': 2,
+      'Lozan ve Atatürk Dönemi Dış Politika': 2,
+      'Atatürk İnkılapları': 1,
+      'Atatürk İlkeleri ve Çağdaşlaşma': 1,
+    },
+
+    // KPSS - Coğrafya
+    'kpss_cog': {
+      'Harita Bilgisi': 2,
+      'Dünya’nın Şekli ve Hareketleri': 1,
+      'Türkiye’nin Coğrafi Konumu': 1,
+      'İklim Bilgisi ve Hava Olayları': 2,
+      'Yer Şekilleri': 3,
+      'Sular (Akarsular–Göller–Denizler)': 2,
+      'Toprak ve Bitki Örtüsü': 2,
+      'Nüfus ve Yerleşme': 2,
+      'Göç': 1,
+      'Ekonomik Faaliyetler (Genel)': 2,
+      'Tarım ve Hayvancılık': 1,
+      'Madenler–Enerji–Sanayi': 1,
+      'Ulaşım–Ticaret–Turizm': 1,
+      'Türkiye’nin Bölgeleri': 1,
+      'Çevre ve Doğal Afetler': 1,
+    },
+
+    // KPSS - Vatandaşlık
+    'kpss_vat': {
+      'Hukukun Temel Kavramları': 2,
+      'Devlet Biçimleri–Demokrasi–Kuvvetler Ayrılığı': 2,
+      'Anayasa Hukukuna Giriş–Türk Anayasa Tarihi': 2,
+      '1982 Anayasası Temel İlkeler': 3,
+      'Yasama': 3,
+      'Yürütme': 3,
+      'Yargı': 2,
+      'Temel Hak ve Hürriyetler': 5,
+      'İdare Hukuku': 3,
+      'Uluslararası Kuruluşlar': 2,
+    },
+
+    // KPSS - Güncel Bilgiler
+    'kpss_guncel': {
+      'Güncel Olaylar': 3,
+      'Kültür–Sanat–Spor Gündemi': 2,
+      'Ekonomi–Bilim–Teknoloji Gündemi': 1,
+    },
+  };
+
+  for (final entry in counts.entries) {
+    final subjectId = entry.key;
+    final topicMap = entry.value;
+
+    for (final t in topicMap.entries) {
+      final title = t.key;
+      final qc = t.value;
+
+      await (db.update(db.topics)
+        ..where((row) =>
+        row.subjectId.equals(subjectId) &
+        row.title.equals(title) &
+        row.archived.equals(false)))
+          .write(TopicsCompanion(questionCount: drift.Value(qc)));
+    }
+  }
 }

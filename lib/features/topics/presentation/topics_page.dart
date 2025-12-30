@@ -8,6 +8,29 @@ import 'package:kpss_tekrar_takibi/features/topics/application/topics_controller
 import 'package:kpss_tekrar_takibi/app/router/app_router.dart';
 import 'package:kpss_tekrar_takibi/core/db/app_database.dart';
 import 'package:kpss_tekrar_takibi/features/topics/domain/review_intervals.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+
+
+final _topicsItemScrollControllerProvider =
+Provider.autoDispose<ItemScrollController>((ref) => ItemScrollController());
+
+final _topicsItemPositionsListenerProvider =
+Provider.autoDispose<ItemPositionsListener>((ref) => ItemPositionsListener.create());
+
+// Auto-focus / highlight state should be per-page instance.
+// autoDispose => sayfadan çıkınca sıfırlanır, tekrar girince yine focus yapar.
+final _topicsDidAutoFocusProvider =
+StateProvider.autoDispose<bool>((ref) => false);
+
+final _topicsAutoFocusIdProvider =
+StateProvider.autoDispose<String?>((ref) => null);
+
+final _topicsIsAutoFocusingProvider =
+StateProvider.autoDispose<bool>((ref) => false);
+
+final _topicsHighlightIdProvider =
+StateProvider.autoDispose<String?>((ref) => null);
+
 
 /// subjectId + parentTopicId kombinasyonu ile (ana/alt) listeleri çekmek için.
 class TopicsArgs {
@@ -44,8 +67,21 @@ final topicsProvider = FutureProvider.family<List<Topic>, TopicsArgs>((ref, args
       return base & t.parentTopicId.equals(args.parentTopicId!);
     })
     ..orderBy([
-          (t) => drift.OrderingTerm.desc(t.questionCount),
-          (t) => drift.OrderingTerm.asc(t.title),
+      // 1) Başlatılanlar en üstte
+          (tbl) => drift.OrderingTerm(
+        expression: tbl.lastReviewedAt.isNotNull() | tbl.nextReviewAt.isNotNull(),
+        mode: drift.OrderingMode.desc,
+      ),
+
+      // 2) Zamanı en az kalan en üstte
+          (tbl) => drift.OrderingTerm(
+        expression: tbl.nextReviewAt,
+        mode: drift.OrderingMode.asc,
+        nulls: drift.NullsOrder.last,
+      ),
+
+      // 3) Stabil sıralama
+          (tbl) => drift.OrderingTerm(expression: tbl.title),
     ]);
 
   return q.get();
@@ -91,12 +127,16 @@ class TopicsPage extends ConsumerWidget {
   /// Alt konular sayfası AppBar başlığı için
   final String? parentTitle;
 
+  /// Dashboard/Home'dan gelince otomatik scroll + highlight hedefi
+  final String? focusTopicId;
+
   const TopicsPage({
     super.key,
     required this.subjectId,
     required this.subjectName,
     this.parentTopicId,
     this.parentTitle,
+    this.focusTopicId,
   });
 
 
@@ -118,21 +158,32 @@ class TopicsPage extends ConsumerWidget {
 
         return StatefulBuilder(
           builder: (ctx, setState) {
-            final header = (parentTopicTitle == null || parentTopicTitle!.trim().isEmpty)
+            final header = (parentTopicTitle == null || parentTopicTitle.trim().isEmpty)
                 ? topic.title
                 : '${parentTopicTitle!} > ${topic.title}';
 
-            final hasStarted = topic.nextReviewAt != null;
+            final isNotStarted = topic.reviewState == 0;
+            final isActive = topic.reviewState == 1;
+            final isCompleted = topic.reviewState == 2;
+            final isMaintenance = topic.reviewState == 3;
+            final hasStarted = isActive || isMaintenance;
             final now = DateTime.now();
-            final state = MemoryUtils.stateLabel(now, topic.lastReviewedAt, topic.nextReviewAt);
-            final memPercent = topic.nextReviewAt == null
+            final state = isCompleted
+                ? 'Tamamlandı'
+                : MemoryUtils.stateLabel(now, topic.lastReviewedAt, topic.nextReviewAt);
+
+            final memPercent = isCompleted
+                ? '%100'
+                : (topic.nextReviewAt == null
                 ? '-'
-                : '%${MemoryUtils.percent(now, topic.lastReviewedAt, topic.nextReviewAt)}';
-            final remaining = MemoryUtils.remainingLong(now, topic.nextReviewAt);
+                : '%${MemoryUtils.percent(now, topic.lastReviewedAt, topic.nextReviewAt)}');
+
+            final remaining = isCompleted ? '-' : MemoryUtils.remainingLong(now, topic.nextReviewAt);
+
             final totalLevels = ReviewIntervals.daysForDifficulty(difficulty).length;
-            final level = topic.nextReviewAt == null
-                ? '-/$totalLevels'
-                : '${topic.intervalIndex + 1}/$totalLevels';
+            final level = isCompleted
+                ? '$totalLevels/$totalLevels'
+                : (topic.nextReviewAt == null ? '-/$totalLevels' : '${topic.intervalIndex + 1}/$totalLevels');
 
             return SafeArea(
               child: Padding(
@@ -155,16 +206,19 @@ class TopicsPage extends ConsumerWidget {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
+
                         ChipInfo(label: 'Hafıza', value: '$memPercent ($state)'),
                         ChipInfo(label: 'Unutmaya', value: remaining),
                         ChipInfo(label: 'Seviye', value: level),
                         ChipInfo(label: 'Aralık', value: _nextIntervalLabel(topic.intervalIndex, difficulty)),
+                        if (topic.questionCount > 0)
+                          ChipInfo(label: 'KPSS', value: '~${topic.questionCount} soru'),
                       ],
                     ),
 
                     const SizedBox(height: 16),
 
-                    if (!hasStarted) ...[
+                    if (isNotStarted) ...[
                       Row(
                         children: [
                           Text('Zorluk', style: Theme.of(ctx).textTheme.titleMedium),
@@ -202,7 +256,7 @@ class TopicsPage extends ConsumerWidget {
                       const SizedBox(height: 16),
                     ],
 
-                    if (!hasStarted) ...[
+                    if (isNotStarted) ...[
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton(
@@ -210,7 +264,7 @@ class TopicsPage extends ConsumerWidget {
                             await _startReview(ref, topic, listArgs, difficulty: difficulty);
                             Navigator.of(ctx).pop();
                           },
-                          child: const Text('Konu ve Soru Çözümü Bitti Takibi Başlat'),
+                          child: const Text('Konu ve Soru Çözümü Bitti • Takibi Başlat'),
                         ),
                       ),
                     ] else ...[
@@ -302,20 +356,83 @@ class TopicsPage extends ConsumerWidget {
         required int difficulty,
       }) async {
     final db = ref.read(appDatabaseProvider);
-
     final nowMs = DateTime.now().millisecondsSinceEpoch;
 
     final days = ReviewIntervals.daysForDifficulty(difficulty);
     final idx = ReviewIntervals.clampIndex(row.intervalIndex, length: days.length);
-    final nextIdx = ReviewIntervals.clampIndex(idx + 1, length: days.length);
-    final nextDays = days[nextIdx];
 
-    final nextMs = nowMs + Duration(days: nextDays).inMilliseconds;
+// Maintenance: her seferinde maintenanceDays kadar ileri
+    if (row.reviewState == 3) {
+      final nextMs = nowMs + Duration(days: row.maintenanceDays).inMilliseconds;
+      await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
+        TopicsCompanion(
+          lastReviewedAt: drift.Value(nowMs),
+          nextReviewAt: drift.Value(nextMs),
+        ),
+      );
+      ref.invalidate(topicsProvider(currentArgs));
+      return;
+    }
+
+// Son seviyedeyse: bakım moduna geçir
+    final isLast = idx >= days.length - 1;
+    if (isLast) {
+      final nextMs = nowMs + Duration(days: row.maintenanceDays).inMilliseconds;
+      await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
+        TopicsCompanion(
+          reviewState: const drift.Value(3),
+          intervalIndex: drift.Value(idx),
+          lastReviewedAt: drift.Value(nowMs),
+          nextReviewAt: drift.Value(nextMs),
+        ),
+      );
+      ref.invalidate(topicsProvider(currentArgs));
+      return;
+    }
+
+// normal ilerleme
+    final nextIdx = ReviewIntervals.clampIndex(idx + 1, length: days.length);
+    final gap = ReviewIntervals.gapDays(days, idx, nextIdx); // <<< fark gün
+    final nextMs = nowMs + Duration(days: days[nextIdx]).inMilliseconds;
 
     await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
       TopicsCompanion(
         difficulty: drift.Value(difficulty),
+        reviewState: const drift.Value(1),
         intervalIndex: drift.Value(nextIdx),
+        lastReviewedAt: drift.Value(nowMs),
+        nextReviewAt: drift.Value(nextMs),
+      ),
+    );
+
+    ref.invalidate(topicsProvider(currentArgs));
+  }
+
+  Future<void> _completeTopic(WidgetRef ref, Topic row, TopicsArgs currentArgs) async {
+    final db = ref.read(appDatabaseProvider);
+    await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
+      const TopicsCompanion(
+        reviewState: drift.Value(2),
+        nextReviewAt: drift.Value(null),
+      ),
+    );
+    ref.invalidate(topicsProvider(currentArgs));
+  }
+
+  Future<void> _startMaintenance(
+      WidgetRef ref,
+      Topic row,
+      TopicsArgs currentArgs, {
+        required int difficulty,
+      }) async {
+    final db = ref.read(appDatabaseProvider);
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final nextMs = nowMs + Duration(days: row.maintenanceDays).inMilliseconds;
+
+    await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
+      TopicsCompanion(
+        difficulty: drift.Value(difficulty),
+        reviewState: const drift.Value(3),
         lastReviewedAt: drift.Value(nowMs),
         nextReviewAt: drift.Value(nextMs),
       ),
@@ -336,21 +453,21 @@ class TopicsPage extends ConsumerWidget {
 
     final days = ReviewIntervals.daysForDifficulty(difficulty);
     final idx = ReviewIntervals.clampIndex(row.intervalIndex, length: days.length);
-    final nextIdx = ReviewIntervals.clampIndex(idx - 1, length: days.length);
-    final nextDays = days[nextIdx];
 
-    final nextMs = nowMs + Duration(days: nextDays).inMilliseconds;
-
-    await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
-      TopicsCompanion(
-        difficulty: drift.Value(difficulty),
-        intervalIndex: drift.Value(nextIdx),
-        lastReviewedAt: drift.Value(nowMs),
-        nextReviewAt: drift.Value(nextMs),
-      ),
-    );
-
-    ref.invalidate(topicsProvider(currentArgs));
+    if (row.reviewState == 3) {
+      final backIdx = ReviewIntervals.clampIndex(idx - 1, length: days.length);
+      final nextMs = nowMs + Duration(days: days[backIdx]).inMilliseconds;
+      await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
+        TopicsCompanion(
+          reviewState: const drift.Value(1),
+          intervalIndex: drift.Value(backIdx),
+          lastReviewedAt: drift.Value(nowMs),
+          nextReviewAt: drift.Value(nextMs),
+        ),
+      );
+      ref.invalidate(topicsProvider(currentArgs));
+      return;
+    }
   }
 
   Future<void> _startReview(
@@ -360,16 +477,21 @@ class TopicsPage extends ConsumerWidget {
         required int difficulty,
       }) async {
     final db = ref.read(appDatabaseProvider);
-
     final nowMs = DateTime.now().millisecondsSinceEpoch;
 
-    final days = ReviewIntervals.daysForDifficulty(difficulty);
-    final startIdx = 0; // ilk tekrar her zaman yarın
-    final nextMs = nowMs + Duration(days: days[startIdx]).inMilliseconds;
+    final cumulative = ReviewIntervals.daysForDifficulty(difficulty);
+
+    // Gün 0'dayız (öğrenme bitti)
+    final startIdx = 0;
+
+    // İlk tekrar: Gün 1 => gap = cumulative[1] - cumulative[0]
+    final gap = ReviewIntervals.gapDays(cumulative, 0, 1);
+    final nextMs = nowMs + Duration(days: gap).inMilliseconds;
 
     await (db.update(db.topics)..where((t) => t.id.equals(row.id))).write(
       TopicsCompanion(
         difficulty: drift.Value(difficulty),
+        reviewState: const drift.Value(1),
         intervalIndex: drift.Value(startIdx),
         lastReviewedAt: drift.Value(nowMs),
         nextReviewAt: drift.Value(nextMs),
@@ -399,6 +521,75 @@ class TopicsPage extends ConsumerWidget {
       data: (d) => d,
       orElse: () => DateTime.now(),
     );
+
+    final listArgs = TopicsArgs(subjectId: subjectId, parentTopicId: parentTopicId);
+
+    final itemScrollController = ref.watch(_topicsItemScrollControllerProvider);
+    final itemPositionsListener = ref.watch(_topicsItemPositionsListenerProvider);
+    final highlightId = ref.watch(_topicsHighlightIdProvider);
+
+    ref.listen<AsyncValue<List<Topic>>>(
+
+        topicsProvider(listArgs),
+            (prev, next) {
+      final id = focusTopicId;
+      if (id == null) return;
+
+      // Başarıyla odaklandıysa tekrar yapma
+      if (ref.read(_topicsDidAutoFocusProvider)) return;
+
+      // Aynı anda birden fazla denemeyi engelle
+      if (ref.read(_topicsIsAutoFocusingProvider)) return;
+
+      // Aynı id için tekrar denemeyi engelle (başarısızsa aşağıda null’a çekiyoruz)
+      if (ref.read(_topicsAutoFocusIdProvider) == id) return;
+
+      final items = next.asData?.value;
+      if (items == null || items.isEmpty) return;
+
+      final idx = items.indexWhere((t) => t.id == id);
+      if (idx < 0) return;
+
+      // lock
+      ref.read(_topicsIsAutoFocusingProvider.notifier).state = true;
+      ref.read(_topicsAutoFocusIdProvider.notifier).state = id;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        // Liste attach olmadıysa ileride tekrar denensin
+        if (!itemScrollController.isAttached) {
+          ref.read(_topicsIsAutoFocusingProvider.notifier).state = false;
+          ref.read(_topicsAutoFocusIdProvider.notifier).state = null;
+          return;
+        }
+
+        try {
+          await itemScrollController.scrollTo(
+            index: idx,
+            duration: const Duration(milliseconds: 420),
+            curve: Curves.easeOutCubic,
+            alignment: 0.12,
+          );
+
+          // success => bu sayfa instance'ında bir daha çalışmasın
+          ref.read(_topicsDidAutoFocusProvider.notifier).state = true;
+
+          // highlight
+          ref.read(_topicsHighlightIdProvider.notifier).state = id;
+          Future.delayed(const Duration(milliseconds: 1500), () {
+            if (!context.mounted) return;
+            ref.read(_topicsHighlightIdProvider.notifier).state = null;
+          });
+        } finally {
+          if (context.mounted) {
+            ref.read(_topicsIsAutoFocusingProvider.notifier).state = false;
+          }
+        }
+      });
+    },
+    );
+
+
+
 
     // Sadece ana konular sayfasında count + expand state mantıklı
     final countsAsync = parentTopicId == null
@@ -433,18 +624,21 @@ class TopicsPage extends ConsumerWidget {
             data: (counts) {
               final expanded = ref.watch(expandedParentsProvider);
 
-              return ListView.separated(
+              return ScrollablePositionedList.separated(
+                itemScrollController: itemScrollController,
+                itemPositionsListener: itemPositionsListener,
                 padding: const EdgeInsets.all(16),
                 itemCount: topics.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 10),
                 itemBuilder: (ctx, i) {
                   final t = topics[i];
                   final tint = MemoryUtils.cardTint(context, now, t.lastReviewedAt, t.nextReviewAt);
-                  final state = MemoryUtils.stateLabel(now, t.lastReviewedAt, t.nextReviewAt);
-                  final memPercent = t.nextReviewAt == null
-                      ? '-'
-                      : '%${MemoryUtils.percent(now, t.lastReviewedAt, t.nextReviewAt)}';
-                  final remainingShort = MemoryUtils.remainingShort(now, t.nextReviewAt);
+                  final remaining = MemoryUtils.remainingShort(now, t.nextReviewAt);
+
+                  final isHighlighted = highlightId == t.id;
+                  final baseColor = tint ?? Theme.of(context).colorScheme.surface;
+                  final highlightColor = Theme.of(context).colorScheme.primaryContainer;
+
                   final subCount = counts[t.id] ?? 0;
                   final hasSubtopics = parentTopicId == null && subCount > 0;
                   final isExpanded = expanded.contains(t.id);
@@ -454,8 +648,11 @@ class TopicsPage extends ConsumerWidget {
                       ? ref.watch(topicsProvider(childrenArgs))
                       : null;
 
+
                   return Card(
+                    key: ValueKey(t.id),
                     color: tint,
+                    surfaceTintColor: Colors.transparent,
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Column(
@@ -473,14 +670,12 @@ class TopicsPage extends ConsumerWidget {
                             ),
                             title: Row(
                               children: [
-                                Expanded(child: Text('${t.title} (${t.questionCount})')),
+                                Expanded(child: Text(t.title)),
+                                if (t.questionCount > 0) ...[
+                                  const SizedBox(width: 8),
+                                  QuestionCountPill(count: t.questionCount),
+                                ],
                                 const SizedBox(width: 8),
-                                CountdownWithRemaining(
-                                  now: now,
-                                  intervalIndex: t.intervalIndex,
-                                  lastReviewedAt: t.lastReviewedAt,
-                                  nextReviewAt: t.nextReviewAt,
-                                ),
                               ],
                             ),
                             subtitle: Padding(
@@ -488,8 +683,39 @@ class TopicsPage extends ConsumerWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Hafıza: $memPercent ($state) • Unutmaya: $remainingShort'),
-                                  const SizedBox(height: 8),
+                                  MemoryHeader(
+                                    now: now,
+                                    lastReviewedAt: t.lastReviewedAt,
+                                    nextReviewAt: t.nextReviewAt,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  MemoryDecayBar(
+                                    now: now,
+                                    lastReviewedAt: t.lastReviewedAt,
+                                    nextReviewAt: t.nextReviewAt,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const MemoryLegend(),
+                                  if (t.nextReviewAt != null) ...[
+                                    const SizedBox(height: 6),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Text(
+                                        '⏳ $remaining',
+                                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                          fontSize: 11,
+                                          color: Colors.black.withValues(alpha: 0.55),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 10),
+                                  IntervalHeader(
+                                    intervalIndex: t.intervalIndex,
+                                    difficulty: t.difficulty,
+                                    started: t.nextReviewAt != null,
+                                  ),
+                                  const SizedBox(height: 6),
                                   IntervalStrip(
                                     intervalIndex: t.intervalIndex,
                                     difficulty: t.difficulty,
