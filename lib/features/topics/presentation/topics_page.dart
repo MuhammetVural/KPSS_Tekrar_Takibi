@@ -67,21 +67,8 @@ final topicsProvider = FutureProvider.family<List<Topic>, TopicsArgs>((ref, args
       return base & t.parentTopicId.equals(args.parentTopicId!);
     })
     ..orderBy([
-      // 1) Başlatılanlar en üstte
-          (tbl) => drift.OrderingTerm(
-        expression: tbl.lastReviewedAt.isNotNull() | tbl.nextReviewAt.isNotNull(),
-        mode: drift.OrderingMode.desc,
-      ),
-
-      // 2) Zamanı en az kalan en üstte
-          (tbl) => drift.OrderingTerm(
-        expression: tbl.nextReviewAt,
-        mode: drift.OrderingMode.asc,
-        nulls: drift.NullsOrder.last,
-      ),
-
-      // 3) Stabil sıralama
-          (tbl) => drift.OrderingTerm(expression: tbl.title),
+          (t) => drift.OrderingTerm.asc(t.createdAt),
+          (t) => drift.OrderingTerm.asc(t.title), // sadece tie-breaker
     ]);
 
   return q.get();
@@ -671,10 +658,8 @@ class TopicsPage extends ConsumerWidget {
                             title: Row(
                               children: [
                                 Expanded(child: Text(t.title)),
-                                if (t.questionCount > 0) ...[
-                                  const SizedBox(width: 8),
-                                  QuestionCountPill(count: t.questionCount),
-                                ],
+                                const SizedBox(width: 8),
+                                QuestionCountPill(count: t.questionCount),
                                 const SizedBox(width: 8),
                               ],
                             ),

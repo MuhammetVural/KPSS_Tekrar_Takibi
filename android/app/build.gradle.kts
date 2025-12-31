@@ -8,6 +8,11 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+dependencies {
+    // flutter_local_notifications için gerekli
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+}
+
 // Load keystore properties for RELEASE signing
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -43,10 +48,13 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+
+        // desugar_jdk_libs için şart
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "17"
     }
 
     defaultConfig {
@@ -59,7 +67,6 @@ android {
 
     buildTypes {
         release {
-            // IMPORTANT: Release must be signed with RELEASE keystore (not debug)
             signingConfig = signingConfigs.getByName("release")
         }
     }

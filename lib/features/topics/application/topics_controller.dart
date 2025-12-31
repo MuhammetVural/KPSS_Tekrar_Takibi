@@ -1150,11 +1150,7 @@ class SubtopicsPanel extends StatelessWidget {
                   dense: true,
                   visualDensity: const VisualDensity(vertical: -2),
                   leading: const Icon(Icons.subdirectory_arrow_right, size: 18),
-                  title: Text(
-                    items[i].questionCount > 0
-                        ? '${items[i].title} (${items[i].questionCount})'
-                        : items[i].title,
-                  ),
+                  title: Text('${items[i].title} (${items[i].questionCount})'),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -1198,7 +1194,7 @@ class QuestionCountPill extends StatelessWidget {
         border: Border.all(color: Colors.black.withValues(alpha: 0.10)),
       ),
       child: Text(
-        'KPSS: ~$count',
+        'Soru Sayısı: ~$count',
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
           fontSize: 10,
           color: cs.onSurfaceVariant.withValues(alpha: isDark ? 0.90 : 0.70),
