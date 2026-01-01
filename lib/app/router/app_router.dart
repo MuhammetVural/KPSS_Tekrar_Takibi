@@ -10,7 +10,10 @@ import '../../features/topics/presentation/topics_page.dart';
 
 part 'app_router.gr.dart';
 
-final appRouterProvider = Provider<AppRouter>((ref) => AppRouter());
+/// Single router instance so notification taps can navigate reliably.
+final AppRouter rootAppRouter = AppRouter();
+
+final appRouterProvider = Provider<AppRouter>((ref) => rootAppRouter);
 
 @AutoRouterConfig(replaceInRouteName: 'Page,Route')
 class AppRouter extends RootStackRouter {

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -90,8 +92,7 @@ class NotificationService {
     await _plugin.initialize(
       settings,
       onDidReceiveNotificationResponse: (resp) {
-        // App process ayaktayken tıklama (foreground/background).
-        // resp.payload -> deep link amaçlı kullanılabilir.
+        _handleNotificationResponse(resp);
       },
       onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
@@ -136,10 +137,67 @@ class NotificationService {
       ),
       iOS: DarwinNotificationDetails(
         presentAlert: true,
+        presentBanner: true,
+        presentList: true,
         presentSound: true,
         presentBadge: true,
       ),
     );
+  }
+
+  void _handleNotificationResponse(NotificationResponse resp) {
+    final payload = resp.payload;
+    if (payload == null || payload.trim().isEmpty) return;
+
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(payload) as Map<String, dynamic>;
+    } catch (_) {
+      // Old payload format was like: topic:<id>  (cannot navigate reliably without subject info)
+      return;
+    }
+
+    if (data['type'] != 'topic_review') return;
+
+    final subjectId = (data['subjectId'] ?? '').toString();
+    final subjectName = (data['subjectName'] ?? '').toString();
+    final topicId = (data['topicId'] ?? '').toString();
+    final parentTopicIdRaw = data['parentTopicId'];
+    final parentTopicId = (parentTopicIdRaw == null || parentTopicIdRaw.toString().trim().isEmpty)
+        ? null
+        : parentTopicIdRaw.toString();
+
+    if (subjectId.isEmpty || subjectName.isEmpty || topicId.isEmpty) return;
+
+    // Router bazen tam o anda mount olmuyor; bir frame sonra push daha güvenli.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      rootAppRouter.push(
+        TopicsRoute(
+          subjectId: subjectId,
+          subjectName: subjectName,
+          parentTopicId: parentTopicId, // null => ana konular, dolu => alt konular
+          parentTitle: null,
+          focusTopicId: topicId,
+        ),
+      );
+    });
+  }
+
+  String _topicPayload({
+    required String subjectId,
+    required String subjectName,
+    required String topicId,
+    required String kind, // 'critical' / 'very_critical'
+    String? parentTopicId,
+  }) {
+    return jsonEncode({
+      'type': 'topic_review',
+      'subjectId': subjectId,
+      'subjectName': subjectName,
+      'topicId': topicId,
+      'parentTopicId': parentTopicId,
+      'kind': kind,
+    });
   }
 
   // ---- Memory-threshold notification logic ----
@@ -218,45 +276,57 @@ class NotificationService {
         continue;
       }
 
-      final totalMs = total.inMilliseconds;
+    final totalMs = total.inMilliseconds;
 
-      // strength = 1 - elapsed/total
-      // Kritik: strength ~= 0.35  -> elapsedRatio = 0.65
-      // Çok kritik: strength ~= 0.15 -> elapsedRatio = 0.85
-      final criticalAt = last.add(
-        Duration(milliseconds: (totalMs * 0.65).round()),
+    // strength = 1 - elapsed/total
+    // Kritik: strength ~= 0.35  -> elapsedRatio = 0.65
+    // Çok kritik: strength ~= 0.15 -> elapsedRatio = 0.85
+    final criticalAt = last.add(
+      Duration(milliseconds: (totalMs * 0.65).round()),
+    );
+    final veryCriticalAt = last.add(
+      Duration(milliseconds: (totalMs * 0.85).round()),
+    );
+
+    // Kritik bildirimi
+    if (criticalAt.isAfter(now) && criticalAt.isBefore(next)) {
+      final remaining = next.difference(criticalAt);
+      await scheduleAt(
+        id: _notifId(t.id, 1),
+        title: 'Kritik eşik: ${t.title}',
+        body: 'Kalan süre: ${_formatRemaining(remaining)}\n$note',
+        at: criticalAt,
+        payload: _topicPayload(
+          subjectId: t.subjectId,
+          subjectName: item.subjectName,
+          topicId: t.id,
+          parentTopicId: t.parentTopicId,
+          kind: 'critical',
+        ),
       );
-      final veryCriticalAt = last.add(
-        Duration(milliseconds: (totalMs * 0.85).round()),
+    } else {
+      await cancel(_notifId(t.id, 1));
+    }
+
+    // Çok kritik bildirimi
+    if (veryCriticalAt.isAfter(now) && veryCriticalAt.isBefore(next)) {
+      final remaining = next.difference(veryCriticalAt);
+      await scheduleAt(
+        id: _notifId(t.id, 2),
+        title: 'Çok kritik: ${t.title}',
+        body: 'Kalan süre: ${_formatRemaining(remaining)}\n$note',
+        at: veryCriticalAt,
+        payload: _topicPayload(
+          subjectId: t.subjectId,
+          subjectName: item.subjectName,
+          topicId: t.id,
+          parentTopicId: t.parentTopicId,
+          kind: 'very_critical',
+        ),
       );
-
-      // Kritik bildirimi
-      if (criticalAt.isAfter(now) && criticalAt.isBefore(next)) {
-        final remaining = next.difference(criticalAt);
-        await scheduleAt(
-          id: _notifId(t.id, 1),
-          title: 'Kritik eşik: ${t.title}',
-          body: 'Kalan süre: ${_formatRemaining(remaining)}\n$note',
-          at: criticalAt,
-          payload: 'topic:${t.id}',
-        );
-      } else {
-        await cancel(_notifId(t.id, 1));
-      }
-
-      // Çok kritik bildirimi
-      if (veryCriticalAt.isAfter(now) && veryCriticalAt.isBefore(next)) {
-        final remaining = next.difference(veryCriticalAt);
-        await scheduleAt(
-          id: _notifId(t.id, 2),
-          title: 'Çok kritik: ${t.title}',
-          body: 'Kalan süre: ${_formatRemaining(remaining)}\n$note',
-          at: veryCriticalAt,
-          payload: 'topic:${t.id}',
-        );
-      } else {
-        await cancel(_notifId(t.id, 2));
-      }
+    } else {
+      await cancel(_notifId(t.id, 2));
+    }
     }
   }
 

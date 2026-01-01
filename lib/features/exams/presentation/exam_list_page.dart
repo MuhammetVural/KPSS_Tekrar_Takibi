@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'dart:ui';
 
 import 'package:auto_route/annotations.dart';
 import 'package:auto_route/auto_route.dart';
+import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +12,7 @@ import 'package:kpss_tekrar_takibi/core/db/app_database.dart';
 import 'package:kpss_tekrar_takibi/core/theme/app_theme.dart';
 
 import '../../../main.dart';
+import '../../home/application/selected_subject_provider.dart';
 
 @RoutePage()
 class ExamListPage extends ConsumerWidget {
@@ -93,6 +96,47 @@ class ExamListPage extends ConsumerWidget {
     }
   }
 
+  Future<void> _runKpssCumleBilgisiCriticalTest(WidgetRef ref) async {
+    final db = ref.read(appDatabaseProvider);
+    final now = DateTime.now();
+    final lastMs = now.millisecondsSinceEpoch;
+    final nextMs = now.add(const Duration(minutes: 2)).millisecondsSinceEpoch;
+
+    final topicRow = await (db.select(db.topics)
+      ..where((t) =>
+      t.subjectId.equals('kpss_tr') &
+      t.title.equals('Cümle Bilgisi') &
+      t.archived.equals(false)))
+        .getSingleOrNull();
+
+    if (topicRow == null) {
+      debugPrint('TEST: Topic not found: kpss_tr / Cümle Bilgisi');
+      return;
+    }
+
+    // kritik/çok kritik iptal edilmesin diye aktif moda çekiyoruz
+    await (db.update(db.topics)..where((t) => t.id.equals(topicRow.id))).write(
+      TopicsCompanion(
+        archived: const drift.Value(false),
+        reviewState: const drift.Value(1),
+        intervalIndex: const drift.Value(0),
+        lastReviewedAt: drift.Value(lastMs),
+        nextReviewAt: drift.Value(nextMs),
+      ),
+    );
+
+    debugPrint('TEST: Updated: last=$now next=${DateTime.fromMillisecondsSinceEpoch(nextMs)}');
+
+    // Beklemeden sync’i force edelim (provider devreye girmese bile test çalışsın)
+    final items = await ref.read(startedHomeTopicsProvider.future);
+    await NotificationService.instance.syncMemoryThresholdNotifications(
+      items: items,
+      previousItems: null,
+    );
+
+    debugPrint('TEST: Expect ~78s kritik and ~102s çok kritik after update.');
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(appDatabaseProvider);
@@ -170,6 +214,15 @@ class ExamListPage extends ConsumerWidget {
             ),
             const SizedBox(width: 8),
             _AppBarIconButton(
+              icon: Icons.notifications_active_rounded,
+              tooltip: 'Kritik test (Cümle Bilgisi)',
+              bg: iconBg,
+              border: iconBorder,
+              onTap: () async {
+                await _runKpssCumleBilgisiCriticalTest(ref);
+              },
+            ),
+            _AppBarIconButton(
               icon: Icons.language,
               tooltip: 'TR/EN',
               bg: iconBg,
@@ -182,6 +235,14 @@ class ExamListPage extends ConsumerWidget {
                   final at = DateTime.now().add(const Duration(seconds: 10));
 
                   await NotificationService.instance.scheduleAt(
+                    payload: jsonEncode({
+                      'type': 'topic_review',
+                      'subjectId': 'kpss_tr',
+                      'subjectName': 'Türkçe',
+                      'topicId': 'kpss_tr_cumle_bilgisi',
+                      'parentTopicId': null,
+                      'kind': 'test',
+                    }),
                     id: 999, // her testte farklı ver istersen
                     title: 'Test',
                     body: '10 saniye sonra geldi',
