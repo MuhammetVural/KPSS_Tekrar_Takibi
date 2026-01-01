@@ -71,7 +71,22 @@ final topicsProvider = FutureProvider.family<List<Topic>, TopicsArgs>((ref, args
           (t) => drift.OrderingTerm.asc(t.title), // sadece tie-breaker
     ]);
 
-  return q.get();
+  final rows = await q.get();
+
+  // Keep DB order (createdAt/title) but move "active timer" topics (nextReviewAt != null)
+  // to the top, preserving their relative order.
+  final active = <Topic>[];
+  final inactive = <Topic>[];
+
+  for (final t in rows) {
+    if (t.nextReviewAt != null) {
+      active.add(t);
+    } else {
+      inactive.add(t);
+    }
+  }
+
+  return [...active, ...inactive];
 });
 
 /// Subject içindeki tüm alt konuları çekip parentId bazında sayar.
