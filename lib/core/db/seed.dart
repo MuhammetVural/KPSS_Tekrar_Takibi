@@ -9,90 +9,108 @@ import 'package:kpss_tekrar_takibi/core/db/app_database.dart';
 // Not: Anahtarlar DB'deki `Subjects.id` ve `Topics.title` ile eşleşmeli.
 // Bazı başlıklar için alternatif yazımları da ekledik.
 const _kpssCountsBySubjectId = <String, Map<String, int>>{
-  // Türkçe (30)
+  // =========================
+  // KPSS - Türkçe (kpss_tr)
+  // =========================
   'kpss_tr': {
     'Sözcükte Anlam': 1,
-    'Sözcüğün, Söz gruplarının Anlamı': 1,
-
     'Cümlede Anlam': 3,
-    'Cümlenin Anlamı, Yorumu': 3,
-
-    'Sözcük Türleri': 2,
-
-    'Sözcüğün Yapısı, Ekler': 1,
-    'Sözcüğün Yapısı – Ekler': 1,
-
-    'Cümlenin Ögeleri': 1,
-    'Ses Olayları': 1,
-    'Yazım Kuralları': 1,
-
     'Paragraf': 14,
-    'Paragrafta Anlatım Yolları, Biçimleri': 2,
-
-    'Sözel Muhakeme ve Mantık': 4,
+    'Anlatım Bozukluğu': 1,
+    'Ses Bilgisi': 1,
+    'Yazım Kuralları': 1,
+    'Noktalama İşaretleri': 1,
+    'Sözcük Türleri': 2,
+    'Cümle Bilgisi': 1,
+    'Fiil Bilgisi (Kip–Kişi–Çatı)': 1,
   },
 
-  // Matematik (26) + Geometri (3)
+  // =========================
+  // KPSS - Matematik (kpss_mat)
+  // =========================
   'kpss_mat': {
-    'Temel Kavramlar – Çözümleme': 3,
-    'Rasyonel Sayılar – Ondalık Sayılar': 2,
-    'Basit Eşitsizlikler': 1,
-    'Mutlak Değer': 1,
-    'Üslü Sayılar': 2,
-    'Köklü Sayılar': 1,
-    'Çarpanlara Ayırma': 1,
-    'Denklem Çözme': 1,
-    'Sayı Problemleri': 1,
-    'Yaş Problemleri': 1,
-    'Hareket Problemleri': 1,
-    'Yüzde Kar-Zarar, Faiz Problemleri': 2,
-    'Bağıntı ve Fonksiyon': 1,
-    'İşlem': 1,
-    'Olasılık': 1,
-    'Sayısal Mantık': 6,
-
-    // Geometri
-    'Özel Üçgenler': 1,
-    'Dörtgenler – Çokgenler': 1,
-    'Analitik Geometri': 1,
+    'Temel Kavramlar': 3,
+    'Sayı Basamakları': 2,
+    'Bölme–Bölünebilme': 1,
+    'EBOB–EKOK': 1,
+    'Rasyonel Sayılar': 2,
+    'Üslü–Köklü Sayılar': 3,
+    'Oran–Orantı': 2,
+    'Denklemler': 1,
+    'Eşitsizlik–Mutlak Değer': 2,
+    // 'Problemler': 30, // seed'de zaten 30 verdin; overwrite istemiyorsan yorumda kalsın
+    'Kümeler': 1,
+    'Fonksiyonlar': 1,
+    'Permütasyon–Kombinasyon–Olasılık': 1,
+    'Tablo–Grafik–Veri Yorumlama': 1,
   },
 
-  // Tarih (26)
+  // =========================
+  // KPSS - Tarih (kpss_tarih)
+  // =========================
   'kpss_tarih': {
-    'İslamiyet’ten Önceki Türk Devletleri': 1,
-    'İlk Müslüman Türk Devletleri': 2,
-    'Osmanlı Devleti Siyasi': 6,
-    'Osmanlı Devleti Kültür ve Uygarlık': 3,
-    'Kurtuluş Savaşı Hazırlık Dönemi': 4,
+    'İslamiyet Öncesi Türk Tarihi': 1,
+    'İlk Türk-İslam Devletleri': 2,
+    'Osmanlı Devleti Kuruluş Dönemi': 2,
+    'Osmanlı Devleti Yükselme Dönemi': 2,
+    'Osmanlı Devleti Duraklama Dönemi': 2,
+    'Osmanlı Devleti Gerileme ve Dağılma': 3,
+    '19. Yüzyıl Islahatları': 1,
+    'Trablusgarp ve Balkan Savaşları': 1,
+    'I. Dünya Savaşı ve Cepheler': 2,
+    'Mondros–İşgaller–Cemiyetler': 2,
+    'Kongreler Dönemi ve Mustafa Kemal': 2,
+    'TBMM Dönemi ve Düzenli Ordu': 2,
     'Kurtuluş Savaşı Cepheleri': 3,
-    'Devrim Tarihi': 2,
-    'Atatürk Dönemi İç ve Dış Politika': 2,
-    'Atatürk İlkeleri': 1,
-    'Çağdaş Türk ve Dünya Tarihi': 3,
+    'Lozan ve Atatürk Dönemi Dış Politika': 2,
+    // 'Atatürk İnkılapları': 30, // seed'de 30 verdin; overwrite istemiyorsan yorumda kalsın
+    'Atatürk İlkeleri ve Çağdaşlaşma': 2,
   },
 
-  // Coğrafya (21)
+  // =========================
+  // KPSS - Coğrafya (kpss_cog)
+  // =========================
   'kpss_cog': {
-    'Türkiye Coğrafi Konumu': 2,
-    'Türkiye’nin Yer şekilleri Su Örtüsü': 3,
-    'Türkiye’nin İklimi Ve Bitki Örtüsü': 3,
-    'Toprak Ve Doğa Çevre': 3,
-    'Türkiye’nin Beşeri Coğrafyası': 3,
-    'Tarım': 1,
-    'Madenler Ve Enerji Kaynakları': 3,
-    'Sanayi': 1,
-    'Ulaşım': 1,
-    'Turizm': 1,
+    'Harita Bilgisi': 2,
+    'Dünya’nın Şekli ve Hareketleri': 1,
+    'Türkiye’nin Coğrafi Konumu': 2,
+    'İklim Bilgisi ve Hava Olayları': 2,
+    'Yer Şekilleri': 3,
+    'Sular (Akarsular–Göller–Denizler)': 2,
+    'Toprak ve Bitki Örtüsü': 3,
+    'Nüfus ve Yerleşme': 3,
+    'Göç': 1,
+    'Ekonomik Faaliyetler (Genel)': 2,
+    'Tarım ve Hayvancılık': 1,
+    'Madenler–Enerji–Sanayi': 3,
+    'Ulaşım–Ticaret–Turizm': 1,
+    'Türkiye’nin Bölgeleri': 2,
+    'Çevre ve Doğal Afetler': 1,
   },
 
-  // Vatandaşlık (15)
+  // =========================
+  // KPSS - Vatandaşlık (kpss_vat)
+  // =========================
   'kpss_vat': {
-    'Hukuka Giriş': 1,
-    'Genel Esaslar': 1,
+    'Hukukun Temel Kavramları': 1,
+    'Devlet Biçimleri–Demokrasi–Kuvvetler Ayrılığı': 1,
+    'Anayasa Hukukuna Giriş–Türk Anayasa Tarihi': 1,
+    '1982 Anayasası Temel İlkeler': 1,
     'Yasama': 3,
     'Yürütme': 3,
-    'İdari Yapı': 4,
-    'Güncel': 3,
+    'Yargı': 1,
+    // 'Temel Hak ve Hürriyetler': 30, // seed'de 30 verdin; overwrite istemiyorsan yorumda kalsın
+    'İdare Hukuku': 4,
+    'Uluslararası Kuruluşlar': 1,
+  },
+
+  // =========================
+  // KPSS - Güncel Bilgiler (kpss_guncel)
+  // =========================
+  'kpss_guncel': {
+    'Güncel Olaylar': 1,
+    'Kültür–Sanat–Spor Gündemi': 1,
+    'Ekonomi–Bilim–Teknoloji Gündemi': 1,
   },
 };
 
@@ -109,10 +127,11 @@ int _kpssQuestionCount(String subjectId, String title) {
       0;
 }
 
-/// Daha önce seed'lenmiş (questionCount=20) KPSS konularını gerçek KPSS dağılımına çevirir.
-/// - Kullanıcı sonradan değiştirmişse ezmemek için sadece `== 20` olanları güncelliyoruz.
-/// - Map'te karşılığı yoksa 0 yapıyoruz (UI'da sayı görünmesin).
-Future<void> _applyKpssQuestionCountsIfDefault20(AppDatabase db) async {
+/// KPSS için placeholder / boş kalan questionCount değerlerini gerçek KPSS dağılımına çevirir.
+/// - Sadece `questionCount == 0` (boş) veya geçmiş sürümlerden kalan `== 20` olanları günceller.
+/// - Kullanıcının sonradan verdiği değerleri (0/20 dışı) EZMEZ.
+/// - Map'te karşılığı yoksa 0 bırakır (UI'da sayı görünmesin).
+Future<void> _applyKpssQuestionCountsIfMissing(AppDatabase db) async {
   const kpssSubjectIds = <String>{
     'kpss_tr',
     'kpss_mat',
@@ -124,7 +143,8 @@ Future<void> _applyKpssQuestionCountsIfDefault20(AppDatabase db) async {
 
   final rows = await (db.select(db.topics)
     ..where((t) =>
-    t.subjectId.isIn(kpssSubjectIds.toList()) & t.questionCount.equals(20)))
+    t.subjectId.isIn(kpssSubjectIds.toList()) &
+    t.questionCount.isIn(const [0, 20])))
       .get();
 
   if (rows.isEmpty) return;
@@ -134,7 +154,7 @@ Future<void> _applyKpssQuestionCountsIfDefault20(AppDatabase db) async {
       final newCount = _kpssQuestionCount(r.subjectId, r.title);
       b.update(
         db.topics,
-        TopicsCompanion(questionCount: Value(newCount)),
+        TopicsCompanion(questionCount: Value(newCount),),
         where: (t) => t.id.equals(r.id),
       );
     }
@@ -380,7 +400,9 @@ Future<void> seedIfNeeded(AppDatabase db) async {
   }
 
   // Daha önce seed'lenmiş (questionCount=20) KPSS konularını gerçek KPSS dağılımına çevir.
-  await applyQuestionCounts(db);
+  // KPSS için placeholder olarak kalan questionCount=20 değerlerini gerçek dağılıma çevirir.
+// (Sadece == 20 olanları günceller, kullanıcı değişikliklerini ezmez.)
+  await _applyKpssQuestionCountsIfMissing(db);
 
 }
 

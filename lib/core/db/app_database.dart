@@ -70,7 +70,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -79,7 +79,7 @@ class AppDatabase extends _$AppDatabase {
     },
     onUpgrade: (m, from, to) async {
       // v2: Topics tablosuna parentTopicId eklendi
-      if (from < 4) {
+      if (from < 5) {
         await m.addColumn(topics, topics.parentTopicId);
       }
     },
