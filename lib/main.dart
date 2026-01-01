@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kpss_tekrar_takibi/app/router/app_router.dart';
@@ -62,6 +64,31 @@ class NotificationService {
   static const String _channelName = 'Review Reminders';
   static const String _channelDesc = 'Scheduled reminders for topic reviews';
 
+  void _debugWatchDelivery({
+    required int id,
+    required DateTime at,
+    String? label,
+  }) {
+    final now = DateTime.now();
+    final delta = at.difference(now);
+    if (delta.isNegative) return;
+    if (delta > const Duration(minutes: 10)) return; // debug spam olmasın
+
+    Timer(delta + const Duration(seconds: 2), () async {
+      try {
+        final pending = await _plugin.pendingNotificationRequests();
+        final ids = pending.map((e) => e.id).toList();
+        final stillPending = ids.contains(id);
+        debugPrint(
+          'NOTIF DEBUG delivery-check id=$id label=${label ?? "-"} at=$at '
+              '=> pendingCount=${pending.length} stillPending=$stillPending ids=$ids',
+        );
+      } catch (e) {
+        debugPrint('NOTIF DEBUG delivery-check ERROR id=$id => $e');
+      }
+    });
+  }
+
   Future<void> init() async {
     if (_initialized) return;
 
@@ -92,6 +119,7 @@ class NotificationService {
     await _plugin.initialize(
       settings,
       onDidReceiveNotificationResponse: (resp) {
+        debugPrint('NOTIF DEBUG tapped actionId=${resp.actionId} payload=${resp.payload} input=${resp.input}');
         _handleNotificationResponse(resp);
       },
       onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
@@ -123,7 +151,16 @@ class NotificationService {
     // Android 13+ izin
     final android =
     _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    await android?.requestNotificationsPermission();
+
+    final notifGranted = await android?.requestNotificationsPermission();
+    debugPrint('NOTIF DEBUG android notif permission granted=$notifGranted');
+
+    try {
+      final exactGranted = await android?.requestExactAlarmsPermission();
+      debugPrint('NOTIF DEBUG android exact-alarm access granted=$exactGranted');
+    } catch (e) {
+      debugPrint('NOTIF DEBUG android exact-alarm request ERROR: $e');
+    }
   }
 
   NotificationDetails _details() {
@@ -352,18 +389,46 @@ class NotificationService {
     await init();
 
     final when = tz.TZDateTime.from(at, tz.local);
+    debugPrint('NOTIF DEBUG schedule id=$id at=$at when=$when tz.local=${tz.local.name}');
+    final delta = at.difference(DateTime.now());
+    final preferExact = delta <= const Duration(minutes: 30);
+    final primaryMode = preferExact
+        ? AndroidScheduleMode.exactAllowWhileIdle
+        : AndroidScheduleMode.inexactAllowWhileIdle;
 
-    await _plugin.zonedSchedule(
-      id,
-      title,
-      body,
-      when,
-      _details(),
-      payload: payload,
-      uiLocalNotificationDateInterpretation:
-      UILocalNotificationDateInterpretation.absoluteTime,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-    );
+    try {
+      await _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        when,
+        _details(),
+        payload: payload,
+        uiLocalNotificationDateInterpretation:
+        UILocalNotificationDateInterpretation.absoluteTime,
+        androidScheduleMode: primaryMode,
+      );
+      debugPrint('NOTIF DEBUG scheduled id=$id mode=$primaryMode');
+    } on PlatformException catch (e) {
+      if (primaryMode == AndroidScheduleMode.exactAllowWhileIdle &&
+          (e.code == 'exact_alarms_not_permitted' || e.code.contains('exact'))) {
+        debugPrint('NOTIF DEBUG exact not permitted -> fallback inexact. error=$e');
+        await _plugin.zonedSchedule(
+          id,
+          title,
+          body,
+          when,
+          _details(),
+          payload: payload,
+          uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        );
+      } else {
+        rethrow;
+      }
+    }
+    _debugWatchDelivery(id: id, at: at, label: title);
   }
 
   Future<void> cancel(int id) => _plugin.cancel(id);

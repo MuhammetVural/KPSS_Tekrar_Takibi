@@ -228,33 +228,6 @@ class ExamListPage extends ConsumerWidget {
               bg: iconBg,
               border: iconBorder,
               onTap: () async {
-                try {
-                  await NotificationService.instance.init();
-                  await NotificationService.instance.requestPermissions();
-
-                  final at = DateTime.now().add(const Duration(seconds: 10));
-
-                  await NotificationService.instance.scheduleAt(
-                    payload: jsonEncode({
-                      'type': 'topic_review',
-                      'subjectId': 'kpss_tr',
-                      'subjectName': 'Türkçe',
-                      'topicId': 'kpss_tr_cumle_bilgisi',
-                      'parentTopicId': null,
-                      'kind': 'test',
-                    }),
-                    id: 999, // her testte farklı ver istersen
-                    title: 'Test',
-                    body: '10 saniye sonra geldi',
-                    at: at,
-                  );
-
-                  debugPrint('scheduled OK at=$at');
-                } catch (e, st) {
-                  debugPrint('schedule ERROR: $e');
-                  debugPrint('$st');
-                }
-
                 final current = ref.read(localeProvider);
                 ref.read(localeProvider.notifier).state =
                 (current?.languageCode == 'tr') ? const Locale('en') : const Locale('tr');
